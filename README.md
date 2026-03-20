@@ -1,4 +1,4 @@
-# srsRAN 5G NR Telemetry Pipeline
+# srsRAN 5G Telemetry Pipeline
 
 Real-time telemetry collection and channel emulation for a 5G NR gNodeB using eBPF instrumentation (jBPF).
 
@@ -63,10 +63,7 @@ plots/            Generated telemetry plot PNGs
 ```
 
 ## Documentation
-
-- [Supervisor Report](docs/SUPERVISOR_REPORT.md) — Comprehensive project overview
 - [Channel Broker Docs](docs/ZMQ_CHANNEL_BROKER_DOCS.md) — Detailed broker documentation
-- [AI Continuation Prompt](docs/AI_CONTINUATION_PROMPT.md) — Session handoff document
 - [Hook Points Report](docs/JBPF_HOOK_POINTS_REPORT.md) — 68 jBPF instrumentation points
 
 ## Prerequisites
