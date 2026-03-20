@@ -1,0 +1,25 @@
+# Compiled binaries (except eBPF .o codelets which are needed)
+zmq_channel_broker
+*.so
+*.pyc
+__pycache__/
+
+# Logs
+*.log
+/tmp/
+
+# Large data
+*.csv
+dataset/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Backup files
+*.bak
+*.bak.none

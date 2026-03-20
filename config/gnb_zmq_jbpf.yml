@@ -1,0 +1,70 @@
+# srsRAN gNB config: ZMQ virtual radio + jbpf + jrt-controller (Example 2)
+# Use with: sudo ./gnb -c gnb_zmq_jbpf.yml
+
+cu_cp:
+  amf:
+    addr: 127.0.0.5
+    port: 38412
+    bind_addr: 127.0.0.1
+    supported_tracking_areas:
+      - tac: 1
+        plmn_list:
+          - plmn: "99970"
+            tai_slice_support_list:
+              - sst: 1
+
+ru_sdr:
+  device_driver: zmq
+  device_args: tx_port=tcp://127.0.0.1:4000,rx_port=tcp://127.0.0.1:4001,base_srate=23.04e6
+  srate: 23.04
+  tx_gain: 75
+  rx_gain: 75
+
+cell_cfg:
+  dl_arfcn: 368500
+  band: 3
+  channel_bandwidth_MHz: 20
+  common_scs: 15
+  plmn: "99970"
+  tac: 1
+  pdcch:
+    dedicated:
+      ss2_type: common
+      dci_format_0_1_and_1_1: false
+    common:
+      ss0_index: 0
+      coreset0_index: 12
+  prach:
+    prach_config_index: 1
+  pdsch:
+    mcs_table: qam64
+  pusch:
+    mcs_table: qam64
+
+jbpf:
+  jbpf_run_path: "/tmp"
+  jbpf_namespace: "jbpf"
+  jbpf_enable_ipc: 1
+  jbpf_standalone_io_out_ip: "127.0.0.1"
+  jbpf_standalone_io_out_port: 20788
+  jbpf_standalone_io_in_port: 30400
+  jbpf_standalone_io_policy: 0
+  jbpf_standalone_io_priority: 0
+  jbpf_io_mem_size_mb: 1024
+  jbpf_ipc_mem_name: "jrt_controller"
+  jbpf_enable_lcm_ipc: 1
+  jbpf_lcm_ipc_name: "jbpf_lcm_ipc"
+  jbpf_agent_cpu: 0
+  jbpf_agent_policy: 1
+  jbpf_agent_priority: 30
+  jbpf_maint_cpu: 0
+  jbpf_maint_policy: 0
+  jbpf_maint_priority: 0
+
+log:
+  filename: /tmp/gnb.log
+  all_level: info
+
+pcap:
+  mac_enable: false
+  ngap_enable: false

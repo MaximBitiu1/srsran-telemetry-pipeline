@@ -1,0 +1,87 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+
+syntax = "proto2";
+
+message du_ue_ctx_creation {
+   required uint64 timestamp = 1;
+   required uint32 du_ue_index = 2;
+   required uint32 tac = 3;
+   required uint32 plmn = 4;
+   required uint32 nci = 5;
+   required uint32 pci = 6;
+   required uint32 crnti = 7;
+}
+
+message du_ue_ctx_update_crnti {
+   required uint64 timestamp = 1;
+   required uint32 du_ue_index = 2;
+   required uint32 crnti = 7;
+}
+
+message du_ue_ctx_deletion {
+   required uint64 timestamp = 1;
+   required uint32 du_ue_index = 2;
+}
+
+message cucp_ue_ctx_creation {
+   required uint64 timestamp = 1;
+   required uint32 cucp_ue_index = 2;
+   required uint32 plmn = 3;
+   optional uint32 pci = 4;
+   optional uint32 crnti = 5;
+}
+
+message cucp_ue_ctx_update {
+   required uint64 timestamp = 1;
+   required uint32 cucp_ue_index = 2;
+   required uint32 plmn = 3;
+   required uint32 pci = 4;
+   required uint32 crnti = 5;
+}
+
+message cucp_ue_ctx_deletion {
+   required uint64 timestamp = 1;
+   required uint32 cucp_ue_index = 2;
+}
+
+message e1ap_cucp_bearer_ctx_setup {
+   required uint64 timestamp = 1;
+   required uint32 cucp_ue_index = 2;
+   required uint32 cucp_ue_e1ap_id = 3;
+}
+
+message e1ap_cuup_bearer_ctx_setup {
+   required uint64 timestamp = 1;
+   required uint32 cuup_ue_index = 2;
+   required bool success = 3;
+   required uint32 cucp_ue_e1ap_id = 4;
+   required uint32 cuup_ue_e1ap_id = 5;
+}
+
+message e1ap_cuup_bearer_ctx_release {
+   required uint64 timestamp = 1;
+   required uint32 cuup_ue_index = 2;
+   required bool success = 3;
+   required uint32 cucp_ue_e1ap_id = 4;
+   required uint32 cuup_ue_e1ap_id = 5;
+}
+
+message nssai_t {
+   required uint32 sst = 1;
+   required uint32 sd = 2;
+}
+
+message cucp_pdu_session_bearer_add_modify {
+   required uint64 timestamp = 1;
+   required uint64 cucp_ue_index = 2;
+   required uint32 pdu_session_id = 3;
+   required uint32 drb_id = 4;
+   required nssai_t nssai = 5;
+}
+
+message cucp_pdu_session_remove {
+   required uint64 timestamp = 1;
+   required uint64 cucp_ue_index = 2;
+   required uint32 pdu_session_id = 3;
+}

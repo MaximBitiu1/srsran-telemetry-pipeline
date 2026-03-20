@@ -1,0 +1,905 @@
+options:
+  parameters:
+    author: Maxim
+    catch_exceptions: 'True'
+    category: Custom
+    cmake_opt: ''
+    comment: ''
+    copyright: ''
+    description: 'ZMQ Channel Broker for srsRAN 5G NR — sits between gNB and UE,
+
+      applies AWGN + Rician/Rayleigh fading to IQ samples while preserving ZMQ
+
+      REQ/REP message boundaries (23040 samples/subframe at 23.04 MHz).'
+    gen_cmake: 'On'
+    gen_linking: dynamic
+    generate_options: qt_gui
+    hier_block_src_path: '.:'
+    id: srsran_channel_broker
+    max_nouts: '0'
+    output_language: python
+    placement: (0,0)
+    qt_qss_theme: ''
+    realtime_scheduling: ''
+    run: 'True'
+    run_command: '{python} -u {filename}'
+    run_options: prompt
+    sizing_mode: fixed
+    thread_safe_setters: ''
+    title: srsRAN 5G NR Channel Broker
+    window_size: (1280, 1024)
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [8, 8]
+    rotation: 0
+    state: enabled
+
+blocks:
+# ── Variables ──────────────────────────────────────────────────────────────
+- name: samp_rate
+  id: variable
+  parameters:
+    comment: ''
+    value: 23.04e6
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [8, 100]
+    rotation: 0
+    state: enabled
+
+- name: snr_db
+  id: variable
+  parameters:
+    comment: ''
+    value: '28.0'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [8, 180]
+    rotation: 0
+    state: enabled
+
+- name: k_factor_db
+  id: variable
+  parameters:
+    comment: ''
+    value: '3.0'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [8, 260]
+    rotation: 0
+    state: enabled
+
+- name: doppler_hz
+  id: variable
+  parameters:
+    comment: ''
+    value: '5.0'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [8, 340]
+    rotation: 0
+    state: enabled
+
+- name: fading_en
+  id: variable
+  parameters:
+    comment: ''
+    value: '1'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [8, 420]
+    rotation: 0
+    state: enabled
+
+- name: gnb_tx_port
+  id: variable
+  parameters:
+    comment: ''
+    value: '4000'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [8, 500]
+    rotation: 0
+    state: enabled
+
+- name: gnb_rx_port
+  id: variable
+  parameters:
+    comment: ''
+    value: '4001'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [8, 580]
+    rotation: 0
+    state: enabled
+
+- name: ue_rx_port
+  id: variable
+  parameters:
+    comment: ''
+    value: '2000'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [120, 500]
+    rotation: 0
+    state: enabled
+
+- name: ue_tx_port
+  id: variable
+  parameters:
+    comment: ''
+    value: '2001'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [120, 580]
+    rotation: 0
+    state: enabled
+
+- name: noise_voltage
+  id: variable
+  parameters:
+    comment: ''
+    value: 1.0 / math.sqrt(2.0 * pow(10, snr_db / 10.0))
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [120, 180]
+    rotation: 0
+    state: enabled
+
+# ── Imports ────────────────────────────────────────────────────────────────
+- name: import_math
+  id: import
+  parameters:
+    alias: ''
+    comment: ''
+    imports: import math
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [240, 8]
+    rotation: 0
+    state: enabled
+
+- name: import_np
+  id: import
+  parameters:
+    alias: ''
+    comment: ''
+    imports: import numpy as np
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [360, 8]
+    rotation: 0
+    state: enabled
+
+- name: import_threading
+  id: import
+  parameters:
+    alias: ''
+    comment: ''
+    imports: import threading
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [480, 8]
+    rotation: 0
+    state: enabled
+
+- name: import_zmq
+  id: import
+  parameters:
+    alias: ''
+    comment: ''
+    imports: import zmq as _zmq
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [600, 8]
+    rotation: 0
+    state: enabled
+
+- name: import_scipy
+  id: import
+  parameters:
+    alias: ''
+    comment: ''
+    imports: from scipy.special import j0 as bessel_j0
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [720, 8]
+    rotation: 0
+    state: enabled
+
+- name: import_collections
+  id: import
+  parameters:
+    alias: ''
+    comment: ''
+    imports: import collections
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [880, 8]
+    rotation: 0
+    state: enabled
+
+# ── QT GUI Range Widgets ──────────────────────────────────────────────────
+- name: snr_slider
+  id: variable_qtgui_range
+  parameters:
+    comment: ''
+    gui_hint: 0,0,1,2
+    label: SNR (dB)
+    min_len: '200'
+    orient: QtCore.Qt.Horizontal
+    rangeType: float
+    start: '5'
+    step: '0.5'
+    stop: '40'
+    value: snr_db
+    widget: counter_slider
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [240, 100]
+    rotation: 0
+    state: enabled
+
+- name: k_factor_slider
+  id: variable_qtgui_range
+  parameters:
+    comment: ''
+    gui_hint: 0,2,1,2
+    label: K-Factor (dB)
+    min_len: '200'
+    orient: QtCore.Qt.Horizontal
+    rangeType: float
+    start: '-10'
+    step: '0.5'
+    stop: '20'
+    value: k_factor_db
+    widget: counter_slider
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [400, 100]
+    rotation: 0
+    state: enabled
+
+- name: doppler_slider
+  id: variable_qtgui_range
+  parameters:
+    comment: ''
+    gui_hint: 1,0,1,2
+    label: Doppler (Hz)
+    min_len: '200'
+    orient: QtCore.Qt.Horizontal
+    rangeType: float
+    start: '0.1'
+    step: '1'
+    stop: '300'
+    value: doppler_hz
+    widget: counter_slider
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [560, 100]
+    rotation: 0
+    state: enabled
+
+- name: fading_chooser
+  id: variable_qtgui_chooser
+  parameters:
+    comment: ''
+    gui_hint: 1,2,1,2
+    label: Fading
+    label0: 'Off (AWGN only)'
+    label1: 'Rician'
+    label2: 'Rayleigh'
+    label3: ''
+    label4: ''
+    num_opts: '3'
+    option0: '0'
+    option1: '1'
+    option2: '2'
+    option3: '3'
+    option4: '4'
+    options: '[0, 1, 2]'
+    type: int
+    value: fading_en
+    widget: radio_buttons
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [720, 100]
+    rotation: 0
+    state: enabled
+
+# ── Embedded Python Block: ZMQ Channel Broker ─────────────────────────────
+- name: epy_block_broker
+  id: epy_block
+  parameters:
+    _source_code: "\"\"\"\\nEmbedded Python Block: srsRAN ZMQ\
+      \ Channel Broker\\n\\nRuns two relay threads (DL / UL)\
+      \ that proxy ZMQ REQ/REP\\nmessages between gNB and UE,\
+      \ applying AWGN + flat Rician/Rayleigh\\nfading.  Outputs\
+      \ the most recent DL IQ to a GNU Radio\\nstreaming port\
+      \ so QT GUI sinks can visualise the channel.\\n\\nPort\
+      \ topology (same as C zmq_channel_broker):\\n  gNB TX (REP\
+      \ :4000) -> Broker DL -> :2000 UE RX\\n  UE  TX (REP\
+      \ :2001) -> Broker UL -> :4001 gNB RX\\n\"\"\"\\n\\nimport\
+      \ numpy as np\\nimport math, threading, collections\\n\\\
+      nfrom gnuradio import gr\\nimport zmq as _zmq\\nfrom scipy.special\
+      \ import j0 as bessel_j0\\n\\n\\nclass FadingState:\\n\
+      \\    def __init__(self, enabled, doppler, samp_rate, k_db,\
+      \ rng):\\n        self.enabled = enabled\\n        self.doppler\
+      \ = doppler\\n        self.samp_rate = samp_rate\\n   \
+      \\     self.rng = rng\\n        k_lin = 10.0 ** (k_db\
+      \ / 10.0)\\n        kp1 = k_lin + 1.0\\n        self.los_amp\
+      \ = math.sqrt(k_lin / kp1)\\n        self.scatter_amp\
+      \ = math.sqrt(1.0 / kp1)\\n        if enabled:\\n     \
+      \\       self.h_I = rng.standard_normal() * math.sqrt(0.5)\\n\
+      \\            self.h_Q = rng.standard_normal() * math.sqrt(0.5)\\n\
+      \\        else:\\n            self.h_I = 1.0\\n         \
+      \\   self.h_Q = 0.0\\n\\n    def update_and_apply(self,\
+      \ iq):\\n        if not self.enabled:\\n            return\
+      \ iq\\n        n = len(iq)\\n        T = n / self.samp_rate\\n\
+      \\        alpha = float(bessel_j0(2.0 * math.pi * self.doppler\
+      \ * T))\\n        sigma = math.sqrt(max(0.0, (1.0 - alpha\
+      \ * alpha) * 0.5))\\n        n1, n2 = self.rng.standard_normal(2)\\n\
+      \\        self.h_I = alpha * self.h_I + sigma * n1\\n\
+      \\        self.h_Q = alpha * self.h_Q + sigma * n2\\n\
+      \\        h = complex(self.los_amp + self.scatter_amp\
+      \ * self.h_I,\\n                    self.scatter_amp *\
+      \ self.h_Q)\\n        return iq * np.complex64(h)\\n\\n\
+      \\    def reconfigure(self, enabled, doppler, k_db):\\n\
+      \\        self.enabled = enabled\\n        self.doppler\
+      \ = doppler\\n        k_lin = 10.0 ** (k_db / 10.0)\\n\
+      \\        kp1 = k_lin + 1.0\\n        self.los_amp = math.sqrt(k_lin\
+      \ / kp1)\\n        self.scatter_amp = math.sqrt(1.0 /\
+      \ kp1)\\n\\n\\ndef add_awgn(iq, noise_std, rng):\\n  \
+      \\  noise = (rng.standard_normal(len(iq))\\n           \
+      \\  + 1j * rng.standard_normal(len(iq))) * np.float32(noise_std)\\n\
+      \\    return iq + noise.astype(np.complex64)\\n\\n\\ndef\
+      \ relay_thread(label, src_addr, dst_addr, noise_std_ref,\
+      \ fading, rng, stop_ev, viz_buf):\\n    ctx = _zmq.Context()\\n\
+      \\    tmo = 500\\n    req = ctx.socket(_zmq.REQ)\\n  \
+      \\  req.setsockopt(_zmq.LINGER, 0)\\n    req.setsockopt(_zmq.RCVTIMEO,\
+      \ tmo)\\n    req.setsockopt(_zmq.SNDTIMEO, tmo)\\n   \
+      \ req.connect(src_addr)\\n    rep = ctx.socket(_zmq.REP)\\n\
+      \\    rep.setsockopt(_zmq.LINGER, 0)\\n    rep.setsockopt(_zmq.RCVTIMEO,\
+      \ tmo)\\n    rep.setsockopt(_zmq.SNDTIMEO, tmo)\\n   \
+      \ rep.bind(dst_addr)\\n    count = 0\\n    while not stop_ev.is_set():\\n\
+      \\        try:\\n            try:\\n                downstream_req\
+      \ = rep.recv()\\n            except _zmq.Again:\\n    \
+      \\            continue\\n            req.send(downstream_req)\\n\
+      \\            while not stop_ev.is_set():\\n            \
+      \\    try:\\n                    raw = req.recv()\\n   \
+      \\                 break\\n                except _zmq.Again:\\n\
+      \\                    continue\\n            if stop_ev.is_set():\\n\
+      \\                break\\n            iq = np.frombuffer(raw,\
+      \ dtype=np.complex64).copy()\\n            iq = fading.update_and_apply(iq)\\n\
+      \\            iq = add_awgn(iq, noise_std_ref[0], rng)\\n\
+      \\            rep.send(iq.tobytes())\\n            count\
+      \ += 1\\n            if label == 'DL' and viz_buf is not\
+      \ None:\\n                viz_buf.append(iq)\\n        \
+      \\    if count == 1:\\n                print(f'[GRC] {label}:\
+      \ first msg relayed ({len(iq)} samples)')\\n        except\
+      \ _zmq.ZMQError as e:\\n            if stop_ev.is_set():\\n\
+      \\                break\\n            print(f'[GRC] {label}:\
+      \ ZMQ error: {e}')\\n            break\\n    req.close()\\n\
+      \\    rep.close()\\n    ctx.term()\\n    print(f'[GRC]\
+      \ {label}: exiting (relayed {count} msgs)')\\n\\n\\nclass\
+      \ channel_broker_source(gr.sync_block):\\n    \\\"\\\"\\\"ZMQ\
+      \ Channel Broker — relays IQ with impairments and\\n  \
+      \\  outputs DL stream for visualisation.\\\"\\\"\\\"\\n\\n\
+      \\    def __init__(self, snr_db=28.0, k_factor_db=3.0,\
+      \ doppler_hz=5.0,\\n                 fading_en=1, samp_rate=23.04e6,\\n\
+      \\                 gnb_tx_port=4000, gnb_rx_port=4001,\\n\
+      \\                 ue_rx_port=2000, ue_tx_port=2001):\\n\
+      \\        gr.sync_block.__init__(self,\\n            name='srsRAN\
+      \ ZMQ Channel Broker',\\n            in_sig=[],\\n    \
+      \\        out_sig=[np.complex64])\\n        self.samp_rate\
+      \ = samp_rate\\n        self.snr_db = snr_db\\n       \
+      \ self.k_factor_db = k_factor_db\\n        self.doppler_hz\
+      \ = doppler_hz\\n        self.fading_en = fading_en\\n\
+      \\        self.gnb_tx_port = gnb_tx_port\\n        self.gnb_rx_port\
+      \ = gnb_rx_port\\n        self.ue_rx_port = ue_rx_port\\n\
+      \\        self.ue_tx_port = ue_tx_port\\n        self._dl_noise_std\
+      \ = [1.0 / math.sqrt(2.0 * pow(10, snr_db / 10.0))]\\n\
+      \\        self._ul_noise_std = [1.0 / math.sqrt(2.0 *\
+      \ pow(10, snr_db / 10.0))]\\n        self._stop = threading.Event()\\n\
+      \\        self._viz_buf = collections.deque(maxlen=4)\\n\
+      \\        self._dl_rng = np.random.default_rng(42)\\n\
+      \\        self._ul_rng = np.random.default_rng(137)\\n\
+      \\        fading_on = fading_en >= 1\\n        k_db =\
+      \ 0.0 if fading_en == 2 else k_factor_db\\n        self._dl_fading\
+      \ = FadingState(fading_on, doppler_hz, samp_rate, k_db,\
+      \ self._dl_rng)\\n        self._ul_fading = FadingState(fading_on,\
+      \ doppler_hz, samp_rate, k_db, self._ul_rng)\\n\\n   \
+      \ def start(self):\\n        self._stop.clear()\\n     \
+      \\   addr = '127.0.0.1'\\n        self._dl_thread = threading.Thread(\\n\
+      \\            target=relay_thread,\\n            args=('DL',\\n\
+      \\                  f'tcp://{addr}:{self.gnb_tx_port}',\\n\
+      \\                  f'tcp://0.0.0.0:{self.ue_rx_port}',\\n\
+      \\                  self._dl_noise_std, self._dl_fading,\\n\
+      \\                  self._dl_rng, self._stop, self._viz_buf),\\n\
+      \\            daemon=True)\\n        self._ul_thread =\
+      \ threading.Thread(\\n            target=relay_thread,\\n\
+      \\            args=('UL',\\n                  f'tcp://{addr}:{self.ue_tx_port}',\\n\
+      \\                  f'tcp://0.0.0.0:{self.gnb_rx_port}',\\n\
+      \\                  self._ul_noise_std, self._ul_fading,\\n\
+      \\                  self._ul_rng, self._stop, None),\\n\
+      \\            daemon=True)\\n        self._dl_thread.start()\\n\
+      \\        self._ul_thread.start()\\n        print('[GRC]\
+      \ Relay threads started')\\n        return True\\n\\n\
+      \\    def stop(self):\\n        self._stop.set()\\n   \
+      \\     print('[GRC] Stopping relay threads...')\\n     \
+      \\   return True\\n\\n    def work(self, input_items, output_items):\\n\
+      \\        out = output_items[0]\\n        n = len(out)\\n\
+      \\        if self._viz_buf:\\n            iq = self._viz_buf[-1]\\n\
+      \\            avail = len(iq)\\n            use = min(n,\
+      \ avail)\\n            out[:use] = iq[:use]\\n         \
+      \\   if use < n:\\n                out[use:] = np.zeros(n\
+      \ - use, dtype=np.complex64)\\n        else:\\n         \
+      \\   out[:] = np.zeros(n, dtype=np.complex64)\\n       \
+      \ return n\\n\\n    def set_snr_db(self, val):\\n      \
+      \\  self.snr_db = val\\n        ns = 1.0 / math.sqrt(2.0\
+      \ * pow(10, val / 10.0))\\n        self._dl_noise_std[0]\
+      \ = ns\\n        self._ul_noise_std[0] = ns\\n\\n    def\
+      \ set_k_factor_db(self, val):\\n        self.k_factor_db\
+      \ = val\\n        k = 0.0 if self.fading_en == 2 else\
+      \ val\\n        self._dl_fading.reconfigure(self.fading_en\
+      \ >= 1, self.doppler_hz, k)\\n        self._ul_fading.reconfigure(self.fading_en\
+      \ >= 1, self.doppler_hz, k)\\n\\n    def set_doppler_hz(self,\
+      \ val):\\n        self.doppler_hz = val\\n        k =\
+      \ 0.0 if self.fading_en == 2 else self.k_factor_db\\n\
+      \\        self._dl_fading.reconfigure(self.fading_en >=\
+      \ 1, val, k)\\n        self._ul_fading.reconfigure(self.fading_en\
+      \ >= 1, val, k)\\n\\n    def set_fading_en(self, val):\\n\
+      \\        self.fading_en = val\\n        k = 0.0 if val\
+      \ == 2 else self.k_factor_db\\n        self._dl_fading.reconfigure(val\
+      \ >= 1, self.doppler_hz, k)\\n        self._ul_fading.reconfigure(val\
+      \ >= 1, self.doppler_hz, k)\\n"
+    affinity: ''
+    alias: ''
+    comment: 'ZMQ relay threads preserve message boundaries (23040 samples/subframe).
+
+      DL processed IQ is output to the streaming port for visualisation.'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+  states:
+    _io_cache: ('srsRAN ZMQ Channel Broker', 'channel_broker_source', [('snr_db',
+      'float', 28.0), ('k_factor_db', 'float', 3.0), ('doppler_hz', 'float', 5.0),
+      ('fading_en', 'int', 1), ('samp_rate', 'float', 23040000.0), ('gnb_tx_port',
+      'int', 4000), ('gnb_rx_port', 'int', 4001), ('ue_rx_port', 'int', 2000), ('ue_tx_port',
+      'int', 2001)], [], [('0', 'complex', 1)], 'ZMQ Channel Broker — relays IQ
+      with impairments and\n    outputs DL stream for visualisation.', [])
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [240, 340]
+    rotation: 0
+    state: enabled
+
+# ── Throttle (pace the visualization stream to sample rate) ───────────────
+- name: blocks_throttle_0
+  id: blocks_throttle
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    ignoretag: 'True'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    samples_per_second: samp_rate
+    type: complex
+    vlen: '1'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [520, 356]
+    rotation: 0
+    state: enabled
+
+# ── QT GUI Frequency Sink (Spectrum) ──────────────────────────────────────
+- name: qtgui_freq_sink_x_0
+  id: qtgui_freq_sink_x
+  parameters:
+    affinity: ''
+    alias: ''
+    alpha1: '1.0'
+    alpha10: '1.0'
+    alpha2: '1.0'
+    alpha3: '1.0'
+    alpha4: '1.0'
+    alpha5: '1.0'
+    alpha6: '1.0'
+    alpha7: '1.0'
+    alpha8: '1.0'
+    alpha9: '1.0'
+    autoscale: 'False'
+    average: '1.0'
+    axislabels: 'True'
+    bw: samp_rate
+    color1: '"blue"'
+    color10: '"dark blue"'
+    color2: '"red"'
+    color3: '"green"'
+    color4: '"black"'
+    color5: '"cyan"'
+    color6: '"magenta"'
+    color7: '"yellow"'
+    color8: '"dark red"'
+    color9: '"dark green"'
+    comment: ''
+    ctrlpanel: 'False'
+    fc: '0'
+    fftsize: '2048'
+    freqhalf: 'True'
+    grid: 'True'
+    gui_hint: 2,0,2,2
+    label: Relative Gain
+    label1: DL IQ Spectrum
+    label10: ''''''
+    label2: ''''''
+    label3: ''''''
+    label4: ''''''
+    label5: ''''''
+    label6: ''''''
+    label7: ''''''
+    label8: ''''''
+    label9: ''''''
+    legend: 'True'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    name: '"DL Channel Spectrum"'
+    nconnections: '1'
+    showports: 'False'
+    tr_chan: '0'
+    tr_level: '0.0'
+    tr_mode: qtgui.TRIG_MODE_FREE
+    tr_tag: '""'
+    type: complex
+    units: dB
+    update_time: '0.10'
+    width1: '2'
+    width10: '1'
+    width2: '1'
+    width3: '1'
+    width4: '1'
+    width5: '1'
+    width6: '1'
+    width7: '1'
+    width8: '1'
+    width9: '1'
+    wintype: window.WIN_BLACKMAN_hARRIS
+    ymax: '10'
+    ymin: '-80'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [760, 284]
+    rotation: 0
+    state: enabled
+
+# ── QT GUI Time Sink (IQ Waveform) ───────────────────────────────────────
+- name: qtgui_time_sink_x_0
+  id: qtgui_time_sink_x
+  parameters:
+    affinity: ''
+    alias: ''
+    alpha1: '1.0'
+    alpha10: '1.0'
+    alpha2: '1.0'
+    alpha3: '1.0'
+    alpha4: '1.0'
+    alpha5: '1.0'
+    alpha6: '1.0'
+    alpha7: '1.0'
+    alpha8: '1.0'
+    alpha9: '1.0'
+    autoscale: 'True'
+    axislabels: 'True'
+    color1: blue
+    color10: dark blue
+    color2: red
+    color3: green
+    color4: black
+    color5: cyan
+    color6: magenta
+    color7: yellow
+    color8: dark red
+    color9: dark green
+    comment: ''
+    ctrlpanel: 'False'
+    entags: 'True'
+    grid: 'True'
+    gui_hint: 2,2,2,2
+    label1: I
+    label10: Signal 10
+    label2: Q
+    label3: Signal 3
+    label4: Signal 4
+    label5: Signal 5
+    label6: Signal 6
+    label7: Signal 7
+    label8: Signal 8
+    label9: Signal 9
+    legend: 'True'
+    marker1: '-1'
+    marker10: '-1'
+    marker2: '-1'
+    marker3: '-1'
+    marker4: '-1'
+    marker5: '-1'
+    marker6: '-1'
+    marker7: '-1'
+    marker8: '-1'
+    marker9: '-1'
+    name: '"DL IQ Waveform"'
+    nconnections: '1'
+    size: '2048'
+    srate: samp_rate
+    stemplot: 'False'
+    style1: '1'
+    style10: '1'
+    style2: '1'
+    style3: '1'
+    style4: '1'
+    style5: '1'
+    style6: '1'
+    style7: '1'
+    style8: '1'
+    style9: '1'
+    tr_chan: '0'
+    tr_delay: '0'
+    tr_level: '0.0'
+    tr_mode: qtgui.TRIG_MODE_FREE
+    tr_slope: qtgui.TRIG_SLOPE_POS
+    tr_tag: '""'
+    type: complex
+    update_time: '0.10'
+    width1: '1'
+    width10: '1'
+    width2: '1'
+    width3: '1'
+    width4: '1'
+    width5: '1'
+    width6: '1'
+    width7: '1'
+    width8: '1'
+    width9: '1'
+    ylabel: Amplitude
+    ymax: '1'
+    ymin: '-1'
+    yunit: '""'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [760, 444]
+    rotation: 0
+    state: enabled
+
+# ── QT GUI Constellation Sink ────────────────────────────────────────────
+- name: qtgui_const_sink_x_0
+  id: qtgui_const_sink_x
+  parameters:
+    affinity: ''
+    alias: ''
+    alpha1: '1.0'
+    alpha10: '1.0'
+    alpha2: '1.0'
+    alpha3: '1.0'
+    alpha4: '1.0'
+    alpha5: '1.0'
+    alpha6: '1.0'
+    alpha7: '1.0'
+    alpha8: '1.0'
+    alpha9: '1.0'
+    autoscale: 'True'
+    axislabels: 'True'
+    color1: '"blue"'
+    color10: '"red"'
+    color2: '"red"'
+    color3: '"red"'
+    color4: '"red"'
+    color5: '"red"'
+    color6: '"red"'
+    color7: '"red"'
+    color8: '"red"'
+    color9: '"red"'
+    comment: ''
+    grid: 'True'
+    gui_hint: 4,0,2,2
+    label1: DL IQ
+    label10: ''
+    label2: ''
+    label3: ''
+    label4: ''
+    label5: ''
+    label6: ''
+    label7: ''
+    label8: ''
+    label9: ''
+    legend: 'True'
+    marker1: '0'
+    marker10: '0'
+    marker2: '0'
+    marker3: '0'
+    marker4: '0'
+    marker5: '0'
+    marker6: '0'
+    marker7: '0'
+    marker8: '0'
+    marker9: '0'
+    name: '"DL Constellation"'
+    nconnections: '1'
+    size: '2048'
+    style1: '0'
+    style10: '0'
+    style2: '0'
+    style3: '0'
+    style4: '0'
+    style5: '0'
+    style6: '0'
+    style7: '0'
+    style8: '0'
+    style9: '0'
+    tr_chan: '0'
+    tr_level: '0.0'
+    tr_mode: qtgui.TRIG_MODE_FREE
+    tr_slope: qtgui.TRIG_SLOPE_POS
+    tr_tag: '""'
+    type: complex
+    update_time: '0.10'
+    width1: '1'
+    width10: '1'
+    width2: '1'
+    width3: '1'
+    width4: '1'
+    width5: '1'
+    width6: '1'
+    width7: '1'
+    width8: '1'
+    width9: '1'
+    xmax: '2'
+    xmin: '-2'
+    ymax: '2'
+    ymin: '-2'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [760, 600]
+    rotation: 0
+    state: enabled
+
+# ── QT GUI Waterfall Sink ────────────────────────────────────────────────
+- name: qtgui_waterfall_sink_x_0
+  id: qtgui_waterfall_sink_x
+  parameters:
+    affinity: ''
+    alias: ''
+    alpha1: '1.0'
+    alpha10: '1.0'
+    alpha2: '1.0'
+    alpha3: '1.0'
+    alpha4: '1.0'
+    alpha5: '1.0'
+    alpha6: '1.0'
+    alpha7: '1.0'
+    alpha8: '1.0'
+    alpha9: '1.0'
+    axislabels: 'True'
+    bw: samp_rate
+    color1: '0'
+    color10: '0'
+    color2: '0'
+    color3: '0'
+    color4: '0'
+    color5: '0'
+    color6: '0'
+    color7: '0'
+    color8: '0'
+    color9: '0'
+    comment: ''
+    fc: '0'
+    fftsize: '2048'
+    freqhalf: 'True'
+    grid: 'True'
+    gui_hint: 4,2,2,2
+    int_max: '10'
+    int_min: '-80'
+    label1: ''
+    label10: ''
+    label2: ''
+    label3: ''
+    label4: ''
+    label5: ''
+    label6: ''
+    label7: ''
+    label8: ''
+    label9: ''
+    legend: 'True'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    name: '"DL Waterfall"'
+    nconnections: '1'
+    showports: 'False'
+    type: complex
+    update_time: '0.10'
+    wintype: window.WIN_BLACKMAN_hARRIS
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [760, 760]
+    rotation: 0
+    state: enabled
+
+# ── Callback connections for parameter changes ───────────────────────────
+- name: note_callbacks
+  id: note
+  parameters:
+    alias: ''
+    comment: 'Parameter changes are forwarded to the broker block via callbacks:
+
+      snr_db -> set_snr_db(), k_factor_db -> set_k_factor_db(),
+
+      doppler_hz -> set_doppler_hz(), fading_en -> set_fading_en()'
+    note: ''
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [240, 760]
+    rotation: 0
+    state: enabled
+
+connections:
+- [epy_block_broker, '0', blocks_throttle_0, '0']
+- [blocks_throttle_0, '0', qtgui_freq_sink_x_0, '0']
+- [blocks_throttle_0, '0', qtgui_time_sink_x_0, '0']
+- [blocks_throttle_0, '0', qtgui_const_sink_x_0, '0']
+- [blocks_throttle_0, '0', qtgui_waterfall_sink_x_0, '0']
+
+metadata:
+  file_format: 1
