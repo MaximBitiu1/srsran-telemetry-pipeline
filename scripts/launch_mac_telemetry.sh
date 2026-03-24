@@ -33,7 +33,7 @@ JRTC_CTL_BIN="$JRTC_DIR/out/bin/jrtc-ctl"
 SRSUE_BIN="/usr/local/bin/srsue"
 ZMQ_BROKER_BIN="$HOME/Desktop/zmq_channel_broker"
 GRC_BROKER_SCRIPT="$HOME/Desktop/srsran_channel_broker.py"
-USE_GRC_BROKER=false         # Use GNU Radio channel broker instead of C broker
+USE_GRC_BROKER=true          # Use GNU Radio channel broker instead of C broker
 ZMQ_BROKER_SNR=28            # dB — tuned for HARQ failures without crashing (30=safe, 25=risky)
 ZMQ_BROKER_FADING=false      # Rician fading (--fading to enable)
 ZMQ_BROKER_DOPPLER=5         # Hz — max Doppler freq (5=slow, 10=pedestrian, 70=vehicular)
@@ -42,7 +42,7 @@ ZMQ_BROKER_PROFILE="flat"    # Power delay profile: flat, epa, eva, etu (GRC onl
 ZMQ_BROKER_CFO=0             # Hz — carrier frequency offset (GRC only)
 ZMQ_BROKER_DROP=0            # Burst drop probability 0-1 (GRC only)
 ZMQ_BROKER_SCENARIO="none"   # Time-varying scenario: none, drive-by, urban-walk, edge-of-cell
-USE_GUI=false                # Show QT GUI (--gui, only with --grc)
+USE_GUI=true                 # Show QT GUI (--gui, only with --grc)
 
 # Grafana + InfluxDB telemetry dashboard
 GRAFANA_DIR="$HOME/Desktop/grafana"
@@ -411,6 +411,7 @@ if $START_UE; then
       warn "UE attached but TUN interface not ready — iperf3 may fail"
     fi
   else
+    UE_IP="unknown"
     warn "UE may not be fully attached yet — check $LOG_UE"
   fi
 
@@ -459,11 +460,10 @@ if $START_GRAFANA; then
 
   # Start Grafana
   if ! pgrep -f "grafana.*server.*grafana.ini" &>/dev/null; then
-    cd "$GRAFANA_DIR" && setsid ./bin/grafana server \
+    (cd "$GRAFANA_DIR" && setsid ./bin/grafana server \
       --config grafana.ini \
       --homepath . \
-      >/tmp/grafana.log 2>&1 &
-    cd ->/dev/null
+      >/tmp/grafana.log 2>&1 &)
     sleep 3
     if curl -s http://localhost:3000/api/health | grep -q '"database":"ok"'; then
       ok "Grafana running at http://localhost:3000 (admin/admin)"
@@ -481,7 +481,7 @@ if $START_GRAFANA; then
       --db "$INFLUXDB_DB" \
       --host "$INFLUXDB_HOST" \
       --port "$INFLUXDB_PORT" \
-      --drop \
+      --from-beginning \
       >/tmp/ingestor.log 2>&1 &
     sleep 1
     if pgrep -f "telemetry_to_influxdb" &>/dev/null; then

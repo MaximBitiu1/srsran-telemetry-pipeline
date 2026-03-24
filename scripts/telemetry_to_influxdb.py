@@ -523,6 +523,8 @@ def main():
     parser.add_argument("--host", default=DEFAULT_HOST, help=f"InfluxDB host (default: {DEFAULT_HOST})")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help=f"InfluxDB port (default: {DEFAULT_PORT})")
     parser.add_argument("--drop", action="store_true", help="Drop and recreate the database before starting")
+    parser.add_argument("--from-beginning", action="store_true", dest="from_beginning",
+                        help="Read log from the beginning on startup (captures events before ingestor starts, e.g. NGAP/RRC attach)")
     args = parser.parse_args()
 
     # Connect to InfluxDB
@@ -557,9 +559,9 @@ def main():
         mode = "live"
         print(f"[INFO] Live mode: tailing {filepath}")
         print(f"[INFO] Press Ctrl+C to stop")
-        # When --drop is used, read from the beginning so we capture all events
-        # (RRC attach, NGAP procedures, etc.) that fired before the ingestor started.
-        line_gen = tail_file(filepath, from_beginning=args.drop)
+        # Read from beginning when --drop or --from-beginning: captures events
+        # (NGAP, RRC attach, etc.) that fired before the ingestor started.
+        line_gen = tail_file(filepath, from_beginning=(args.drop or args.from_beginning))
 
     # Process lines
     batch = []
