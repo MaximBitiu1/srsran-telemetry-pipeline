@@ -74,6 +74,13 @@ FADING_MODES = {
     5: "ETU (9-tap, 5000 ns)",
 }
 
+INT_TYPES = {
+    0: "None",
+    1: "CW Tone",
+    2: "Narrowband (1 PRB)",
+}
+INT_TYPE_NAMES = {0: "none", 1: "cw", 2: "narrowband"}
+
 FADING_MODE_PROFILES = {3: 'epa', 4: 'eva', 5: 'etu'}
 
 SCENARIO_NAMES = {
@@ -216,6 +223,51 @@ def apply_cfo(iq, cfo_hz, samp_rate, phase_state):
     return iq_out
 
 
+def apply_interference(iq, int_type, freq_hz, sir_linear, samp_rate, int_phase, rng,
+                       bw_hz=180e3):
+    """Inject a CW or narrowband interferer into IQ samples (DL path only).
+
+    int_type:   'cw'  — single continuous-wave tone at freq_hz
+                'narrowband' — bandlimited noise (1 PRB = 180 kHz) centred at freq_hz
+    freq_hz:    centre frequency offset from baseband DC (Hz); can be negative
+    sir_linear: Signal-to-Interference Ratio (linear power ratio)
+                Lower SIR = stronger interference; SIR < 1 = jammer-dominated
+    int_phase:  mutable [float] list — cumulative CW phase for subframe continuity
+    bw_hz:      narrowband bandwidth (default 1 PRB = 180 kHz at 15 kHz SCS)
+    """
+    n = len(iq)
+    sig_power = float(np.mean(np.real(iq) ** 2 + np.imag(iq) ** 2))
+    if sig_power < 1e-20:
+        return iq
+
+    int_amp = float(math.sqrt(sig_power / sir_linear))
+    phase_inc = 2.0 * math.pi * freq_hz / samp_rate
+
+    # Phase ramp — continuous across subframe boundaries via int_phase[0]
+    phases = np.arange(n, dtype=np.float64) * phase_inc + int_phase[0]
+    int_phase[0] = float((int_phase[0] + phase_inc * n) % (2.0 * math.pi))
+
+    if int_type == 'cw':
+        interferer = np.exp(1j * phases).astype(np.complex64) * np.float32(int_amp)
+
+    elif int_type == 'narrowband':
+        # Complex AWGN, FFT-bandlimited to bw_hz, then frequency-shifted to freq_hz
+        noise = (rng.standard_normal(n) + 1j * rng.standard_normal(n)).astype(np.complex64)
+        spec = np.fft.fft(noise)
+        freqs = np.fft.fftfreq(n, 1.0 / samp_rate)
+        spec[np.abs(freqs) > bw_hz / 2.0] = 0.0
+        noise_filt = np.fft.ifft(spec).astype(np.complex64)
+        filt_power = float(np.mean(np.real(noise_filt) ** 2 + np.imag(noise_filt) ** 2))
+        if filt_power > 1e-30:
+            noise_filt *= np.float32(int_amp / math.sqrt(filt_power))
+        interferer = noise_filt * np.exp(1j * phases).astype(np.complex64)
+
+    else:
+        return iq
+
+    return (iq + interferer).astype(np.complex64)
+
+
 # ── Scenario Runner ──────────────────────────────────────────────────────────
 
 class ScenarioRunner:
@@ -334,6 +386,12 @@ def relay_thread(label, src_addr, dst_addr, imp, rng,
                 #    would exceed the real-time processing budget)
                 if not isinstance(fader, FrequencySelectiveFading):
                     iq = add_awgn(iq, imp['snr_linear'][0], rng)
+                # 5) Interference injection (DL only — UL imp has int_enabled=False)
+                if imp.get('int_enabled', [False])[0]:
+                    iq = apply_interference(
+                        iq, imp['int_type'][0], imp['int_freq'][0],
+                        imp['sir_linear'][0], fader.samp_rate,
+                        imp['int_phase'], rng)
 
             rep.send(iq.tobytes())
 
@@ -365,7 +423,8 @@ class channel_broker_source(gr.sync_block):
     def __init__(self, snr_db=28.0, k_factor_db=3.0, doppler_hz=5.0,
                  fading_mode=1, samp_rate=23.04e6, cfo_hz=0.0, drop_prob=0.0,
                  gnb_tx_port=4000, gnb_rx_port=4001,
-                 ue_rx_port=2000, ue_tx_port=2001):
+                 ue_rx_port=2000, ue_tx_port=2001,
+                 int_type='none', int_freq_hz=1.0e6, sir_db=20.0):
         gr.sync_block.__init__(self, name="srsRAN ZMQ Channel Broker",
                                in_sig=[], out_sig=[np.complex64])
         self.samp_rate = samp_rate
@@ -373,6 +432,9 @@ class channel_broker_source(gr.sync_block):
         self.k_factor_db = k_factor_db
         self.doppler_hz = doppler_hz
         self.fading_mode = fading_mode
+        self.int_type = int_type
+        self.int_freq_hz = int_freq_hz
+        self.sir_db = sir_db
         self.gnb_tx_port = gnb_tx_port
         self.gnb_rx_port = gnb_rx_port
         self.ue_rx_port = ue_rx_port
@@ -385,13 +447,17 @@ class channel_broker_source(gr.sync_block):
         self._ul_msg_count = [0]
 
         snr_lin = pow(10.0, snr_db / 10.0)
+        sir_lin = pow(10.0, sir_db / 10.0) if sir_db < 100.0 else float('inf')
         self._dl_imp = self._make_impairments(
-            snr_lin, fading_mode, doppler_hz, k_factor_db, cfo_hz, drop_prob, self._dl_rng)
+            snr_lin, fading_mode, doppler_hz, k_factor_db, cfo_hz, drop_prob, self._dl_rng,
+            int_enabled=(int_type != 'none'), int_type=int_type,
+            int_freq_hz=int_freq_hz, sir_linear=sir_lin)
         # UL: Rician flat fading (no FIR) to stay within real-time budget
-        # and avoid deep fades that kill PUCCH decoding
+        # and avoid deep fades that kill PUCCH decoding. No interference on UL.
         ul_mode = min(fading_mode, 1) if fading_mode >= 3 else fading_mode
         self._ul_imp = self._make_impairments(
-            snr_lin, ul_mode, doppler_hz, k_factor_db, 0.0, 0.0, self._ul_rng)
+            snr_lin, ul_mode, doppler_hz, k_factor_db, 0.0, 0.0, self._ul_rng,
+            int_enabled=False, int_type='none', int_freq_hz=0.0, sir_linear=float('inf'))
 
     def _make_fading(self, mode, rng):
         if mode in FADING_MODE_PROFILES:
@@ -406,14 +472,21 @@ class channel_broker_source(gr.sync_block):
             return FadingState(False, self.doppler_hz, self.samp_rate,
                                self.k_factor_db, rng)
 
-    def _make_impairments(self, snr_linear, mode, doppler, k_db, cfo, drop, rng):
+    def _make_impairments(self, snr_linear, mode, doppler, k_db, cfo, drop, rng,
+                          int_enabled=False, int_type='none',
+                          int_freq_hz=0.0, sir_linear=float('inf')):
         fading = self._make_fading(mode, rng)
         return {
-            'snr_linear': [snr_linear],
-            'fading':    [fading],
-            'cfo_hz':    [cfo],
-            'cfo_phase': [0.0],
-            'drop_prob': [drop],
+            'snr_linear':  [snr_linear],
+            'fading':      [fading],
+            'cfo_hz':      [cfo],
+            'cfo_phase':   [0.0],
+            'drop_prob':   [drop],
+            'int_enabled': [int_enabled],
+            'int_type':    [int_type],
+            'int_freq':    [int_freq_hz],
+            'sir_linear':  [sir_linear],
+            'int_phase':   [0.0],
         }
 
     def start(self):
@@ -500,6 +573,19 @@ class channel_broker_source(gr.sync_block):
         self._dl_imp['drop_prob'][0] = val
         self._ul_imp['drop_prob'][0] = val
 
+    def set_sir_db(self, val):
+        self.sir_db = val
+        self._dl_imp['sir_linear'][0] = pow(10.0, val / 10.0) if val < 100.0 else float('inf')
+
+    def set_int_type(self, int_type):
+        self.int_type = int_type
+        self._dl_imp['int_type'][0] = int_type
+        self._dl_imp['int_enabled'][0] = (int_type != 'none')
+
+    def set_int_freq_hz(self, val):
+        self.int_freq_hz = val
+        self._dl_imp['int_freq'][0] = val
+
 
 # ── QT GUI Flow Graph ──────────────────────────────────────────────────────
 
@@ -542,6 +628,9 @@ class srsran_channel_broker(gr.top_block, Qt.QWidget):
         self.cfo_hz = cfo_hz = 0.0
         self.drop_prob = drop_prob = 0.0
         self.scenario_id = 0
+        self.sir_db = sir_db = 20.0
+        self.int_type_idx = int_type_idx = 0    # 0=None, 1=CW, 2=Narrowband
+        self.int_freq_mhz = int_freq_mhz = 1.0  # MHz from DC
 
         # ── Row 0: SNR slider + K-factor slider ──────────────────────────
         self._snr_db_range = qtgui.Range(5, 40, 0.5, snr_db, 200)
@@ -599,11 +688,39 @@ class srsran_channel_broker(gr.top_block, Qt.QWidget):
         scenario_group.setLayout(scenario_lay)
         self.top_grid_layout.addWidget(scenario_group, 2, 2, 1, 2)
 
+        # ── Row 3: Interference SIR slider + Interference Type dropdown ──
+        self._sir_db_range = qtgui.Range(-10, 40, 0.5, sir_db, 200)
+        self._sir_db_win = qtgui.RangeWidget(self._sir_db_range,
+            self.set_sir_db, "SIR (dB)", "counter_slider", float,
+            QtCore.Qt.Horizontal)
+        self.top_grid_layout.addWidget(self._sir_db_win, 3, 0, 1, 2)
+
+        self._int_type_combo = Qt.QComboBox()
+        for k in sorted(INT_TYPES.keys()):
+            self._int_type_combo.addItem(INT_TYPES[k], k)
+        self._int_type_combo.setCurrentIndex(int_type_idx)
+        self._int_type_combo.currentIndexChanged.connect(
+            lambda idx: self.set_int_type_idx(self._int_type_combo.itemData(idx)))
+        int_type_group = Qt.QGroupBox("Interference:")
+        int_type_lay = Qt.QHBoxLayout()
+        int_type_lay.addWidget(self._int_type_combo)
+        int_type_group.setLayout(int_type_lay)
+        self.top_grid_layout.addWidget(int_type_group, 3, 2, 1, 2)
+
+        # ── Row 4: Interference frequency slider ─────────────────────────
+        self._int_freq_range = qtgui.Range(-11.0, 11.0, 0.1, int_freq_mhz, 200)
+        self._int_freq_win = qtgui.RangeWidget(self._int_freq_range,
+            self.set_int_freq_mhz, "Int Freq (MHz)", "counter_slider", float,
+            QtCore.Qt.Horizontal)
+        self.top_grid_layout.addWidget(self._int_freq_win, 4, 0, 1, 4)
+
         # ── Blocks ────────────────────────────────────────────────────────
         self.epy_block_broker = channel_broker_source(
             snr_db=snr_db, k_factor_db=k_factor_db, doppler_hz=doppler_hz,
             fading_mode=fading_mode, samp_rate=samp_rate,
-            cfo_hz=cfo_hz, drop_prob=drop_prob)
+            cfo_hz=cfo_hz, drop_prob=drop_prob,
+            int_type=INT_TYPE_NAMES[int_type_idx],
+            int_freq_hz=int_freq_mhz * 1e6, sir_db=sir_db)
 
         self.blocks_throttle_0 = blocks.throttle(
             gr.sizeof_gr_complex, samp_rate, True)
@@ -627,7 +744,7 @@ class srsran_channel_broker(gr.top_block, Qt.QWidget):
         self._qtgui_freq_sink_0_win = sip.wrapinstance(
             self.qtgui_freq_sink_0.qwidget(), Qt.QWidget)
         self.top_grid_layout.addWidget(
-            self._qtgui_freq_sink_0_win, 3, 0, 2, 2)
+            self._qtgui_freq_sink_0_win, 5, 0, 2, 2)
 
         # Time Sink
         self.qtgui_time_sink_0 = qtgui.time_sink_c(
@@ -647,7 +764,7 @@ class srsran_channel_broker(gr.top_block, Qt.QWidget):
         self._qtgui_time_sink_0_win = sip.wrapinstance(
             self.qtgui_time_sink_0.qwidget(), Qt.QWidget)
         self.top_grid_layout.addWidget(
-            self._qtgui_time_sink_0_win, 3, 2, 2, 2)
+            self._qtgui_time_sink_0_win, 5, 2, 2, 2)
 
         # Constellation Sink
         self.qtgui_const_sink_0 = qtgui.const_sink_c(
@@ -666,7 +783,7 @@ class srsran_channel_broker(gr.top_block, Qt.QWidget):
         self._qtgui_const_sink_0_win = sip.wrapinstance(
             self.qtgui_const_sink_0.qwidget(), Qt.QWidget)
         self.top_grid_layout.addWidget(
-            self._qtgui_const_sink_0_win, 5, 0, 2, 2)
+            self._qtgui_const_sink_0_win, 7, 0, 2, 2)
 
         # Waterfall Sink
         self.qtgui_waterfall_sink_0 = qtgui.waterfall_sink_c(
@@ -679,7 +796,7 @@ class srsran_channel_broker(gr.top_block, Qt.QWidget):
         self._qtgui_waterfall_sink_0_win = sip.wrapinstance(
             self.qtgui_waterfall_sink_0.qwidget(), Qt.QWidget)
         self.top_grid_layout.addWidget(
-            self._qtgui_waterfall_sink_0_win, 5, 2, 2, 2)
+            self._qtgui_waterfall_sink_0_win, 7, 2, 2, 2)
 
         # ── Connections ───────────────────────────────────────────────────
         self.connect((self.epy_block_broker, 0), (self.blocks_throttle_0, 0))
@@ -741,6 +858,18 @@ class srsran_channel_broker(gr.top_block, Qt.QWidget):
         self.scenario_id = idx
         self._scenario.set_scenario(idx)
 
+    def set_sir_db(self, val):
+        self.sir_db = val
+        self.epy_block_broker.set_sir_db(val)
+
+    def set_int_type_idx(self, idx):
+        self.int_type_idx = idx
+        self.epy_block_broker.set_int_type(INT_TYPE_NAMES.get(idx, 'none'))
+
+    def set_int_freq_mhz(self, val):
+        self.int_freq_mhz = val
+        self.epy_block_broker.set_int_freq_hz(val * 1e6)
+
 
 # ── Headless mode (no QT GUI — for launch script) ───────────────────────────
 
@@ -749,13 +878,15 @@ class srsran_channel_broker_headless(gr.top_block):
 
     def __init__(self, snr_db=28.0, k_factor_db=3.0, doppler_hz=5.0,
                  fading_mode=1, samp_rate=23.04e6,
-                 cfo_hz=0.0, drop_prob=0.0):
+                 cfo_hz=0.0, drop_prob=0.0,
+                 int_type='none', int_freq_hz=1.0e6, sir_db=20.0):
         gr.top_block.__init__(self, "srsRAN Channel Broker (headless)",
                               catch_exceptions=True)
         self.broker = channel_broker_source(
             snr_db=snr_db, k_factor_db=k_factor_db, doppler_hz=doppler_hz,
             fading_mode=fading_mode, samp_rate=samp_rate,
-            cfo_hz=cfo_hz, drop_prob=drop_prob)
+            cfo_hz=cfo_hz, drop_prob=drop_prob,
+            int_type=int_type, int_freq_hz=int_freq_hz, sir_db=sir_db)
         self.null_sink = blocks.null_sink(gr.sizeof_gr_complex)
         self.throttle = blocks.throttle(gr.sizeof_gr_complex, samp_rate, True)
         self.connect((self.broker, 0), (self.throttle, 0))
@@ -790,6 +921,13 @@ def main(top_block_cls=srsran_channel_broker, options=None):
                         choices=["none", "drive-by", "urban-walk",
                                  "edge-of-cell"],
                         help="Time-varying scenario (default: none)")
+    parser.add_argument("--interference-type", type=str, default="none",
+                        choices=["none", "cw", "narrowband"],
+                        help="DL interference type: none | cw | narrowband (default: none)")
+    parser.add_argument("--interference-freq", type=float, default=1.0e6,
+                        help="Interference centre frequency offset from DC in Hz (default: 1e6)")
+    parser.add_argument("--sir", type=float, default=20.0,
+                        help="Signal-to-Interference Ratio in dB (default: 20)")
     parser.add_argument("--no-gui", action="store_true",
                         help="Run headless (no QT GUI)")
     parser.add_argument("--samp-rate", type=float, default=23.04e6)
@@ -838,6 +976,9 @@ def main(top_block_cls=srsran_channel_broker, options=None):
         print(f"  Drop:      {args.drop_prob*100:.1f}%")
     if scenario_id > 0:
         print(f"  Scenario:  {SCENARIO_NAMES[scenario_id]}")
+    if args.interference_type != 'none':
+        print(f"  Interf:    {args.interference_type.upper()}"
+              f"  freq={args.interference_freq/1e6:.3f} MHz  SIR={args.sir:.1f} dB")
     gui_label = "headless" if args.no_gui else "QT GUI"
     print(f"  Interface: {gui_label}")
     print("-" * 65)
@@ -851,6 +992,8 @@ def main(top_block_cls=srsran_channel_broker, options=None):
         extras.append(f"burst drops {args.drop_prob*100:.0f}%")
     if scenario_id > 0:
         extras.append(f"scenario: {SCENARIO_NAMES[scenario_id]}")
+    if args.interference_type != 'none':
+        extras.append(f"{args.interference_type} interference SIR={args.sir:.0f} dB")
     if not args.no_gui:
         extras.append("live GUI control")
     if extras:
@@ -863,7 +1006,10 @@ def main(top_block_cls=srsran_channel_broker, options=None):
         tb = srsran_channel_broker_headless(
             snr_db=args.snr, k_factor_db=args.k_factor,
             doppler_hz=args.doppler, fading_mode=fading_mode,
-            cfo_hz=args.cfo, drop_prob=args.drop_prob)
+            cfo_hz=args.cfo, drop_prob=args.drop_prob,
+            int_type=args.interference_type,
+            int_freq_hz=args.interference_freq,
+            sir_db=args.sir)
         tb.start()
 
         # Scenario runner in background thread
@@ -924,6 +1070,11 @@ def main(top_block_cls=srsran_channel_broker, options=None):
         tb.set_cfo_hz(args.cfo)
         tb.set_drop_prob(args.drop_prob)
         tb.set_scenario(scenario_id)
+        if args.interference_type != 'none':
+            int_idx = {'cw': 1, 'narrowband': 2}.get(args.interference_type, 0)
+            tb.set_int_type_idx(int_idx)
+            tb.set_int_freq_mhz(args.interference_freq / 1e6)
+            tb.set_sir_db(args.sir)
 
         tb.start()
         tb.show()

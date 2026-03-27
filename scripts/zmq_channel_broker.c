@@ -149,6 +149,58 @@ static inline float fading_gain_db(const fading_state_t *f) {
     return (g > 1e-30f) ? 10.0f * log10f(g) : -300.0f;
 }
 
+/* ── CW Interference ──────────────────────────────────────────────────────── *
+ *
+ * Injects a continuous-wave (CW) tone into the IQ stream to model a
+ * co-channel or adjacent-channel interferer.  Applied on the DL path only
+ * (interference_enabled = 0 in ul_args).
+ *
+ * I(n) = A · exp(j · (2π · f_int · n / fs + φ))
+ *   where A  = √(P_signal / SIR_linear)
+ *         φ  = cumulative phase (updated each subframe for continuity)
+ *
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+typedef struct {
+    int   enabled;
+    float freq_hz;     /* centre frequency offset from DC (Hz); may be negative */
+    float sir_linear;  /* Signal-to-Interference Ratio (linear) */
+    float phase;       /* cumulative phase for subframe continuity */
+    float sample_rate;
+} interference_state_t;
+
+static void interference_init(interference_state_t *intf, int enabled,
+                              float freq_hz, float sir_linear, float srate) {
+    intf->enabled     = enabled;
+    intf->freq_hz     = freq_hz;
+    intf->sir_linear  = sir_linear;
+    intf->phase       = 0.0f;
+    intf->sample_rate = srate;
+}
+
+/* Add CW tone to interleaved float32 I/Q samples. */
+static void interference_apply(interference_state_t *intf,
+                               float *samples, int nfloats) {
+    if (!intf->enabled || intf->sir_linear <= 0.0f) return;
+
+    /* Measure signal power (pre-noise, matched to AWGN reference) */
+    float sig_power = 0.0f;
+    for (int i = 0; i < nfloats; i++) sig_power += samples[i] * samples[i];
+    sig_power /= (float)nfloats;
+    if (sig_power < 1e-20f) return;
+
+    float int_amp   = sqrtf(sig_power / intf->sir_linear);
+    float phase_inc = 2.0f * (float)M_PI * intf->freq_hz / intf->sample_rate;
+
+    for (int i = 0; i + 1 < nfloats; i += 2) {
+        samples[i]     += int_amp * cosf(intf->phase);
+        samples[i + 1] += int_amp * sinf(intf->phase);
+        intf->phase    += phase_inc;
+    }
+    /* Wrap to avoid float precision loss over long runs */
+    intf->phase = fmodf(intf->phase, 2.0f * (float)M_PI);
+}
+
 /* ── Channel Thread ───────────────────────────────────────────────────────── */
 
 typedef struct {
@@ -162,6 +214,9 @@ typedef struct {
     float       sample_rate;
     void       *zmq_ctx;
     unsigned int rng_seed;
+    int         interference_enabled;
+    float       interference_freq;   /* Hz */
+    float       sir_linear;
 } channel_args_t;
 
 static void *channel_thread(void *arg) {
@@ -174,6 +229,11 @@ static void *channel_thread(void *arg) {
     fading_state_t fading;
     fading_init(&fading, ch->fading_enabled, ch->doppler_hz,
                 ch->sample_rate, ch->k_factor_db, &seed);
+
+    /* Initialize CW interference */
+    interference_state_t intf;
+    interference_init(&intf, ch->interference_enabled,
+                      ch->interference_freq, ch->sir_linear, ch->sample_rate);
 
     /* Create sockets */
     void *rep = zmq_socket(ch->zmq_ctx, ZMQ_REP);
@@ -298,6 +358,9 @@ static void *channel_thread(void *arg) {
 
                 total_samples += (unsigned long)num_iq;
             }
+
+            /* (d) CW interference injection (DL only — UL has enabled=0) */
+            interference_apply(&intf, samples, nfloats);
         }
 
         /* 5. Send impaired IQ data to downstream
@@ -342,6 +405,10 @@ int main(int argc, char *argv[]) {
     float ul_doppler  = 10.0f;
     float k_factor_db = 6.0f;    /* default Rician K=6 dB (prevents deep nulls) */
     float srate       = DEFAULT_SRATE;
+    int   intf_enabled = 0;       /* DL CW interference (off by default) */
+    float intf_freq   = 1.0e6f;  /* Hz — default 1 MHz from DC */
+    float sir_db      = 20.0f;   /* Signal-to-Interference Ratio (dB) */
+    float sir_linear  = 100.0f;  /* 10^(20/10) */
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--dl-snr") == 0 && i + 1 < argc) {
@@ -368,6 +435,15 @@ int main(int argc, char *argv[]) {
             fading = 1;
         } else if (strcmp(argv[i], "--srate") == 0 && i + 1 < argc) {
             srate = (float)atof(argv[++i]);
+        } else if (strcmp(argv[i], "--interference-type") == 0 && i + 1 < argc) {
+            char *t = argv[++i];
+            intf_enabled = (strcmp(t, "none") != 0) ? 1 : 0;
+            /* narrowband maps to CW in C broker (no FFT filter available) */
+        } else if (strcmp(argv[i], "--interference-freq") == 0 && i + 1 < argc) {
+            intf_freq = (float)atof(argv[++i]);
+        } else if (strcmp(argv[i], "--sir") == 0 && i + 1 < argc) {
+            sir_db    = (float)atof(argv[++i]);
+            sir_linear = powf(10.0f, sir_db / 10.0f);
         } else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
             printf("Usage: %s [OPTIONS]\n\n", argv[0]);
             printf("AWGN options:\n");
@@ -384,6 +460,12 @@ int main(int argc, char *argv[]) {
             printf("  --doppler <Hz>      Max Doppler frequency, implies --fading (default: 10)\n");
             printf("  --dl-doppler <Hz>   Override DL Doppler, implies --fading\n");
             printf("  --ul-doppler <Hz>   Override UL Doppler, implies --fading\n");
+            printf("\nInterference options (DL only):\n");
+            printf("  --interference-type <type>  none | cw (default: none)\n");
+            printf("                               Use GRC broker (--grc) for narrowband\n");
+            printf("  --interference-freq <Hz>    Centre freq offset from DC (default: 1e6)\n");
+            printf("  --sir <dB>                  Signal-to-Interference Ratio dB (default: 20)\n");
+            printf("                               0 dB = equal power, -10 dB = jammer-dominated\n");
             printf("\nOther:\n");
             printf("  --srate <Hz>        IQ sample rate (default: 23.04e6)\n");
             printf("  -h, --help          Show this help\n");
@@ -425,6 +507,10 @@ int main(int argc, char *argv[]) {
         printf("║  DL: SNR %5.1f dB                                     ║\n", dl_snr_db);
         printf("║  UL: SNR %5.1f dB                                     ║\n", ul_snr_db);
     }
+    if (intf_enabled) {
+    printf("║  DL interference: CW  freq=%.3f MHz  SIR=%.1f dB        ║\n",
+           intf_freq / 1e6f, sir_db);
+    }
     printf("╠═════════════════════════════════════════════════════════╣\n");
     printf("║  gNB TX :4000 → [channel] → :2000 → UE RX              ║\n");
     printf("║  UE  TX :2001 → [channel] → :4001 → gNB RX             ║\n");
@@ -437,29 +523,35 @@ int main(int argc, char *argv[]) {
     void *ctx = zmq_ctx_new();
 
     channel_args_t dl_args = {
-        .name             = "DL",
-        .rep_bind_addr    = "tcp://127.0.0.1:2000",   /* UE connects here */
-        .req_connect_addr = "tcp://127.0.0.1:4000",   /* gNB binds here   */
-        .snr_db           = dl_snr_db,
-        .fading_enabled   = fading,
-        .doppler_hz       = dl_doppler,
-        .sample_rate      = srate,
-        .zmq_ctx          = ctx,
-        .rng_seed         = (unsigned int)time(NULL) ^ 0xDEAD,
-        .k_factor_db      = k_factor_db
+        .name                 = "DL",
+        .rep_bind_addr        = "tcp://127.0.0.1:2000",   /* UE connects here */
+        .req_connect_addr     = "tcp://127.0.0.1:4000",   /* gNB binds here   */
+        .snr_db               = dl_snr_db,
+        .fading_enabled       = fading,
+        .doppler_hz           = dl_doppler,
+        .sample_rate          = srate,
+        .zmq_ctx              = ctx,
+        .rng_seed             = (unsigned int)time(NULL) ^ 0xDEAD,
+        .k_factor_db          = k_factor_db,
+        .interference_enabled = intf_enabled,
+        .interference_freq    = intf_freq,
+        .sir_linear           = sir_linear,
     };
 
     channel_args_t ul_args = {
-        .name             = "UL",
-        .rep_bind_addr    = "tcp://127.0.0.1:4001",   /* gNB connects here */
-        .req_connect_addr = "tcp://127.0.0.1:2001",   /* UE binds here     */
-        .snr_db           = ul_snr_db,
-        .fading_enabled   = fading,
-        .doppler_hz       = ul_doppler,
-        .sample_rate      = srate,
-        .zmq_ctx          = ctx,
-        .rng_seed         = (unsigned int)time(NULL) ^ 0xBEEF,
-        .k_factor_db      = k_factor_db
+        .name                 = "UL",
+        .rep_bind_addr        = "tcp://127.0.0.1:4001",   /* gNB connects here */
+        .req_connect_addr     = "tcp://127.0.0.1:2001",   /* UE binds here     */
+        .snr_db               = ul_snr_db,
+        .fading_enabled       = fading,
+        .doppler_hz           = ul_doppler,
+        .sample_rate          = srate,
+        .zmq_ctx              = ctx,
+        .rng_seed             = (unsigned int)time(NULL) ^ 0xBEEF,
+        .k_factor_db          = k_factor_db,
+        .interference_enabled = 0,   /* no interference on UL */
+        .interference_freq    = 0.0f,
+        .sir_linear           = 1e30f,
     };
 
     pthread_t dl_thread, ul_thread;

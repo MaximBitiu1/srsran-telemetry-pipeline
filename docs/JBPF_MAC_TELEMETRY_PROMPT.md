@@ -1,6 +1,6 @@
 # srsRAN jbpf MAC Scheduler Telemetry — Project Summary & Launch Guide
 
-## Context for AI Model
+## Project Context
 
 You are working on a **5G NR telemetry collection system** built on top of:
 

@@ -4,9 +4,11 @@
 
 This document describes the ZMQ Channel Broker, a custom IQ-level noise injection
 and fading tool built to simulate non-ideal RF channel conditions in the srsRAN
-5G NR ZMQ-based simulation environment. The broker supports AWGN noise injection
-and Rician flat fading (with Rayleigh as a special case). It was written from
-scratch for this project — no pre-existing tool exists for this purpose.
+5G NR ZMQ-based simulation environment. The broker supports AWGN noise injection,
+Rician flat fading (with Rayleigh as a special case), and **narrowband/CW
+interference injection** simulating co-channel or adjacent-channel interferers. It
+was written from scratch for this project — no pre-existing tool exists for this
+purpose.
 
 ### Problem Statement
 
@@ -145,9 +147,11 @@ Each direction (DL and UL) runs in its own thread:
 3. **Receive IQ data** from upstream — a buffer of interleaved float32 I/Q samples
 4. **Apply channel impairments** (in order):
    - (a) Estimate original signal power (RMS², before fading)
-   - (b) If fading enabled: update Rayleigh coefficient, complex-multiply IQ by h
+   - (b) If fading enabled: update Rician/Rayleigh coefficient, complex-multiply IQ by h
    - (c) Add AWGN noise (power relative to pre-fading signal, so deep fades cause
      real SNR drops)
+   - (d) If interference enabled (DL only): inject CW tone or narrowband noise at
+     the configured SIR level (UL relay is never impaired by interference)
 5. **Send impaired IQ data** downstream — the receiver sees degraded samples
 
 ### Channel Models
@@ -199,17 +203,75 @@ the signal is attenuated but noise stays constant → instantaneous SNR plummets
 | 6 | 4 | ~10–15 dB | Gentle — retransmissions but rarely failures |
 | 10 | 10 | ~5–8 dB | Mild — near-AWGN with slight variation |
 
+#### Interference Simulation (Optional, `--interference-type`)
+
+Both brokers support **DL-only interference injection** simulating co-channel or
+adjacent-channel interferers. Interference is applied as the final step in the
+impairment chain (after AWGN), on the DL relay path only — the UL relay thread
+is never affected.
+
+##### CW (Continuous-Wave Tone) — C broker and GRC broker
+
+A single-tone sinusoidal interferer at a configurable offset frequency:
+
+- **Amplitude**: `A = √(P_signal / SIR_linear)` where `P_signal` is measured
+  per-subframe (adaptive to actual signal power)
+- **Phase continuity**: cumulative phase maintained across subframe boundaries,
+  avoiding spectral splatter from phase resets
+- **Signal model**: `I(n) = A·cos(2π·f_int·n/fs + φ)`, `Q(n) = A·sin(2π·f_int·n/fs + φ)`
+
+##### Narrowband (1 PRB Bandlimited Noise) — GRC broker only
+
+Complex AWGN bandlimited to 180 kHz (one 5G NR PRB) at a configurable
+frequency offset:
+
+- **Generation**: white complex AWGN → FFT → zero bins outside
+  `[f_int − 90 kHz, f_int + 90 kHz]` → IFFT → normalize to target SIR power
+- **Frequency shift**: complex carrier `exp(j·2π·f_int·n/fs + φ)` applied after
+  bandlimiting, with cumulative phase maintained across subframes
+- **Auto-routing**: `--interference-type narrowband` in the launch script
+  automatically sets `USE_GRC_BROKER=true` (the C broker supports CW only — it
+  cannot do FFT-based bandlimiting efficiently)
+
+##### SIR (Signal-to-Interference Ratio)
+
+`SIR = 10·log₁₀(P_signal / P_interferer)` in dB. **Lower SIR = stronger
+interference.** Interference power is always scaled to the current signal power,
+so the SIR is maintained even as fading varies the signal level.
+
+##### GUI Controls (GRC broker)
+
+Two new rows added to the GUI when `--interference-type` is set:
+
+| Row | Controls |
+|-----|----------|
+| 3 | SIR slider (−10–40 dB), Interference Type combo (None / CW Tone / Narrowband 1 PRB) |
+| 4 | Interference Frequency slider (±11 MHz) |
+
+Visualization panels shift to rows 5 (freq+time) and 7 (const+waterfall).
+
+##### Validated Results (CW interference, live pipeline)
+
+| SIR (dB) | MAC DL SINR | FAPI UL SNR | Ping RTT (mean) |
+|----------|-------------|-------------|-----------------|
+| ∞ (none) | 25.4 dB | 25.4 dB | ~5 ms |
+| 20 | ~20 dB | ~23 dB | ~7 s |
+| 10 | 3.6 dB | 19.3 dB | ~39 s |
+
+Ping RTT degrades sharply because the DL path carries both user data and
+scheduling/ACK signals. FAPI UL SNR is less affected because interference is DL-only.
+
 ---
 
 ## Files
 
-| File | Description |
-|---|---|
-| `~/Desktop/zmq_channel_broker.c` | C broker source code (Rician/Rayleigh + AWGN) |
-| `~/Desktop/zmq_channel_broker` | Compiled C binary |
-| `~/Desktop/srsran_channel_broker.py` | GRC Python broker (extends C broker with EPA/EVA/ETU, CFO, drops, scenarios, GUI) |
-| `~/Desktop/launch_mac_telemetry.sh` | Pipeline launcher (defaults: K=3, SNR=28, fd=5) |
-| `~/Desktop/stop_mac_telemetry.sh` | Pipeline teardown (includes broker stop) |
+| File | Lines | Description |
+|---|---|---|
+| `~/Desktop/zmq_channel_broker.c` | ~560 | C broker source code (Rician/Rayleigh + AWGN + CW interference) |
+| `~/Desktop/zmq_channel_broker` | — | Compiled C binary |
+| `~/Desktop/srsran_channel_broker.py` | ~1050 | GRC Python broker (extends C broker with EPA/EVA/ETU, CFO, drops, scenarios, narrowband interference, GUI) |
+| `~/Desktop/launch_mac_telemetry.sh` | ~570 | Pipeline launcher (defaults: K=3, SNR=28, fd=5; adds DL iperf3, ping RTT, interference flags) |
+| `~/Desktop/stop_mac_telemetry.sh` | ~110 | Pipeline teardown (includes broker stop, ping stop) |
 | `~/Desktop/telemetry_to_influxdb.py` | Python ingestor (decoder JSON → InfluxDB) |
 | `~/Desktop/plot_all_telemetry.py` | Comprehensive 15-plot generator (all 17 schemas) |
 | `~/Desktop/plots/*.png` | 15 generated telemetry plots |
@@ -262,6 +324,12 @@ gcc -O2 -o zmq_channel_broker zmq_channel_broker.c -lzmq -lm -lpthread
 
 # Help
 ./zmq_channel_broker --help
+
+# CW interference at 1 MHz offset, SIR=10 dB (strong)
+./zmq_channel_broker --interference-type cw --interference-freq 1000000 --sir 10
+
+# CW interference combined with Rician fading
+./zmq_channel_broker --fading --interference-type cw --interference-freq 500000 --sir 20
 ```
 
 ### Via Launch Script
@@ -283,9 +351,21 @@ gcc -O2 -o zmq_channel_broker zmq_channel_broker.c -lzmq -lm -lpthread
 ./launch_mac_telemetry.sh --no-broker
 
 # Tune parameters: edit these in launch_mac_telemetry.sh:
-#   ZMQ_BROKER_SNR=28        (dB, default)
-#   ZMQ_BROKER_K_FACTOR=3    (dB, default)
-#   ZMQ_BROKER_DOPPLER=5     (Hz, default)
+#   ZMQ_BROKER_SNR=28              (dB, default)
+#   ZMQ_BROKER_K_FACTOR=3          (dB, default)
+#   ZMQ_BROKER_DOPPLER=5           (Hz, default)
+#   ZMQ_BROKER_INTF_TYPE="none"    (none|cw|narrowband)
+#   ZMQ_BROKER_INTF_FREQ=1000000   (Hz, default 1 MHz)
+#   ZMQ_BROKER_SIR=20              (dB, default)
+
+# CW interference at 1 MHz, SIR=10 dB (strong degradation)
+./launch_mac_telemetry.sh --interference-type cw --sir 10
+
+# CW interference combined with Rician fading
+./launch_mac_telemetry.sh --fading --interference-type cw --interference-freq 500000 --sir 20
+
+# Narrowband (1 PRB) interference — automatically uses GRC broker
+./launch_mac_telemetry.sh --interference-type narrowband --interference-freq 2000000 --sir 15
 ```
 
 ### SNR Guidelines
@@ -638,7 +718,7 @@ is a strict **superset** of the C broker's capabilities.
 
 | File | Lines | Description |
 |------|-------|-------------|
-| `~/Desktop/srsran_channel_broker.py` | ~950 | GRC broker (Python, GNU Radio 3.10.1.1) |
+| `~/Desktop/srsran_channel_broker.py` | ~1050 | GRC broker (Python, GNU Radio 3.10.1.1) |
 
 ### Dependencies
 
@@ -719,8 +799,10 @@ The GUI window (launched with `--gui` flag) provides:
 | 0 | SNR slider (5–40 dB), K-factor slider (-10–20 dB) |
 | 1 | Doppler slider (0.1–300 Hz), Fading mode combo (Off / Flat Rician / Flat Rayleigh / EPA / EVA / ETU) |
 | 2 | CFO slider (±500 Hz), Drop probability slider (0–25%), Scenario combo |
+| 3 | SIR slider (−10–40 dB), Interference Type combo (None / CW Tone / Narrowband 1 PRB) |
+| 4 | Interference Frequency slider (±11 MHz) |
 
-**Visualization panels** (4):
+**Visualization panels** (4), in rows 5 and 7:
 - Frequency spectrum (2048-pt FFT, Blackman-Harris)
 - IQ time-domain waveform (I and Q traces)
 - Constellation diagram (I/Q scatter)

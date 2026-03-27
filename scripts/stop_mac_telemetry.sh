@@ -67,6 +67,7 @@ fi
 
 # Stop in reverse order
 stop_proc "iperf3"         "iperf3"             true
+stop_proc "ping"           "ping.*10.45.0.1"    true
 stop_proc "srsUE"          "srsue"              true
 stop_proc "ingestor"       "telemetry_to_influxdb" false
 stop_proc "Grafana"        "grafana.*server.*grafana.ini" false

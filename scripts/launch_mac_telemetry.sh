@@ -42,6 +42,9 @@ ZMQ_BROKER_PROFILE="flat"    # Power delay profile: flat, epa, eva, etu (GRC onl
 ZMQ_BROKER_CFO=0             # Hz — carrier frequency offset (GRC only)
 ZMQ_BROKER_DROP=0            # Burst drop probability 0-1 (GRC only)
 ZMQ_BROKER_SCENARIO="none"   # Time-varying scenario: none, drive-by, urban-walk, edge-of-cell
+ZMQ_BROKER_INTF_TYPE="none"  # Interference type: none, cw, narrowband
+ZMQ_BROKER_INTF_FREQ=1000000 # Interference centre frequency offset from DC (Hz)
+ZMQ_BROKER_SIR=20            # Signal-to-Interference Ratio (dB)
 USE_GUI=true                 # Show QT GUI (--gui, only with --grc)
 
 # Grafana + InfluxDB telemetry dashboard
@@ -65,6 +68,8 @@ IPERF_PORT=5201
 IPERF_BITRATE="10M"          # target UDP bitrate (will exceed ZMQ capacity → drops)
 IPERF_DURATION=3600           # seconds of traffic (1 hour)
 IPERF_PKT_LEN=1400            # UDP payload size
+IPERF_DL_PORT=5202            # DL iperf3 (reverse mode: core → UE)
+IPERF_DL_BITRATE="5M"        # DL target bitrate
 
 # Log files
 LOG_DIR="/tmp"
@@ -73,6 +78,7 @@ LOG_GNB="$LOG_DIR/gnb_stderr.log"
 LOG_PROXY="$LOG_DIR/reverse_proxy.log"
 LOG_DECODER="$LOG_DIR/decoder.log"
 LOG_UE="$LOG_DIR/ue.log"
+PING_LOG="$LOG_DIR/ping_ue.log"  # continuous ICMP RTT log
 
 # ── Colours ──────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
@@ -109,6 +115,12 @@ while [[ $# -gt 0 ]]; do
     --drop-prob=*) ZMQ_BROKER_DROP="${1#*=}"; USE_GRC_BROKER=true ;;
     --scenario)   ZMQ_BROKER_SCENARIO="$2"; USE_GRC_BROKER=true; shift ;;
     --scenario=*) ZMQ_BROKER_SCENARIO="${1#*=}"; USE_GRC_BROKER=true ;;
+    --interference-type) ZMQ_BROKER_INTF_TYPE="$2"; [ "$2" = "narrowband" ] && USE_GRC_BROKER=true; shift ;;
+    --interference-type=*) ZMQ_BROKER_INTF_TYPE="${1#*=}"; [ "${1#*=}" = "narrowband" ] && USE_GRC_BROKER=true ;;
+    --interference-freq) ZMQ_BROKER_INTF_FREQ="$2"; shift ;;
+    --interference-freq=*) ZMQ_BROKER_INTF_FREQ="${1#*=}" ;;
+    --sir)        ZMQ_BROKER_SIR="$2"; shift ;;
+    --sir=*)      ZMQ_BROKER_SIR="${1#*=}" ;;
     -h|--help)
       echo "Usage: $0 [--no-ue] [--no-traffic] [--no-broker] [--grc] [--gui] [--fading] [--snr N] [--k-factor N] [--doppler N] [--rayleigh] [--profile P] [--cfo N] [--drop-prob N] [--scenario S]"
       echo "  --no-ue       Skip starting srsUE and traffic generation"
@@ -125,6 +137,9 @@ while [[ $# -gt 0 ]]; do
       echo "  --cfo N       Carrier freq offset in Hz (implies --grc)"
       echo "  --drop-prob N Burst drop probability 0-1 (implies --grc)"
       echo "  --scenario S  Time-varying: none, drive-by, urban-walk, edge-of-cell"
+      echo "  --interference-type T  DL interferer: none (default), cw, narrowband (narrowband implies --grc)"
+      echo "  --interference-freq N  Interferer freq offset from DC in Hz (default: 1e6)"
+      echo "  --sir N       Signal-to-Interference Ratio in dB (default: 20, lower=stronger)"
       exit 0 ;;
     *) warn "Unknown flag: $1" ;;
   esac
@@ -182,6 +197,7 @@ kill_if_running() {
 # ── Pre-flight cleanup ──────────────────────────────────────────────────────
 info "Cleaning up any previous run..."
 kill_if_running "srsue"
+sudoc pkill -9 -f "ping.*10.45.0.1" 2>/dev/null || true
 kill_if_running "telemetry_to_influxdb"
 kill_if_running "grafana.*server.*grafana.ini"
 kill_if_running "decoder run"
@@ -239,6 +255,8 @@ if $START_BROKER; then
     BROKER_ARGS="$BROKER_ARGS --profile $ZMQ_BROKER_PROFILE"
     BROKER_ARGS="$BROKER_ARGS --cfo $ZMQ_BROKER_CFO --drop-prob $ZMQ_BROKER_DROP"
     BROKER_ARGS="$BROKER_ARGS --scenario $ZMQ_BROKER_SCENARIO"
+    [ "$ZMQ_BROKER_INTF_TYPE" != "none" ] && \
+      BROKER_ARGS="$BROKER_ARGS --interference-type $ZMQ_BROKER_INTF_TYPE --interference-freq $ZMQ_BROKER_INTF_FREQ --sir $ZMQ_BROKER_SIR"
     if $ZMQ_BROKER_FADING && [ "$ZMQ_BROKER_K_FACTOR" -eq -100 ] 2>/dev/null; then
       BROKER_ARGS="$BROKER_ARGS --rayleigh"
     fi
@@ -246,6 +264,7 @@ if $START_BROKER; then
     [ "$ZMQ_BROKER_CFO" != "0" ] && BROKER_DESC="$BROKER_DESC, cfo=${ZMQ_BROKER_CFO}Hz"
     [ "$ZMQ_BROKER_DROP" != "0" ] && BROKER_DESC="$BROKER_DESC, drop=${ZMQ_BROKER_DROP}"
     [ "$ZMQ_BROKER_SCENARIO" != "none" ] && BROKER_DESC="$BROKER_DESC, scenario=$ZMQ_BROKER_SCENARIO"
+    [ "$ZMQ_BROKER_INTF_TYPE" != "none" ] && BROKER_DESC="$BROKER_DESC, interf=${ZMQ_BROKER_INTF_TYPE} SIR=${ZMQ_BROKER_SIR}dB"
     BROKER_DESC="$BROKER_DESC]"
     info "[$STEP/$TOTAL_STEPS] Starting GNU Radio channel broker ($BROKER_DESC)..."
     if $USE_GUI; then
@@ -257,6 +276,8 @@ if $START_BROKER; then
     sleep 2
     wait_for_process "GRC broker" "srsran_channel_broker" 8
   else
+    [ "$ZMQ_BROKER_INTF_TYPE" != "none" ] && \
+      BROKER_ARGS="$BROKER_ARGS --interference-type $ZMQ_BROKER_INTF_TYPE --interference-freq $ZMQ_BROKER_INTF_FREQ --sir $ZMQ_BROKER_SIR"
     info "[$STEP/$TOTAL_STEPS] Starting ZMQ channel broker ($BROKER_DESC)..."
     setsid $ZMQ_BROKER_BIN $BROKER_ARGS >/tmp/zmq_broker.log 2>&1 &
     sleep 1
@@ -431,7 +452,20 @@ if $START_UE; then
       sudoc ip netns exec ue1 iperf3 -c "$IPERF_TARGET" -p "$IPERF_PORT" \
         -u -b "$IPERF_BITRATE" -t "$IPERF_DURATION" -l "$IPERF_PKT_LEN" \
         >/tmp/iperf3.log 2>&1 &
-      ok "iperf3 UDP traffic running in background (log: /tmp/iperf3.log)"
+      ok "iperf3 UL traffic running in background (log: /tmp/iperf3.log)"
+
+      # DL iperf3 (reverse mode): server at 10.45.0.1:5202 pushes to UE client
+      iperf3 -s -B "$IPERF_TARGET" -p "$IPERF_DL_PORT" -D 2>/dev/null
+      sleep 1
+      sudoc ip netns exec ue1 iperf3 -c "$IPERF_TARGET" -p "$IPERF_DL_PORT" \
+        -u -b "$IPERF_DL_BITRATE" -t "$IPERF_DURATION" -l "$IPERF_PKT_LEN" --reverse \
+        >/tmp/iperf3_dl.log 2>&1 &
+      ok "iperf3 DL traffic running (${IPERF_DL_BITRATE} reverse, log: /tmp/iperf3_dl.log)"
+
+      # Continuous ICMP ping for RTT monitoring
+      > "$PING_LOG"
+      sudoc ip netns exec ue1 ping -i 1 "$IPERF_TARGET" >>"$PING_LOG" 2>&1 &
+      ok "Ping RTT monitoring: UE → $IPERF_TARGET (log: $PING_LOG)"
     else
       warn "Skipping iperf3 client — TUN interface not ready. Start manually:"
       warn "  sudo ip netns exec ue1 iperf3 -c $IPERF_TARGET -p $IPERF_PORT -u -b $IPERF_BITRATE -t $IPERF_DURATION -l $IPERF_PKT_LEN &"
@@ -537,6 +571,9 @@ echo "    gNB:     $LOG_GNB"
 echo "    Proxy:   $LOG_PROXY"
 echo "    Decoder: $LOG_DECODER"
 $START_UE && echo "    UE:      $LOG_UE" || true
+$START_UE && $START_TRAFFIC && echo "    UL:      /tmp/iperf3.log" || true
+$START_UE && $START_TRAFFIC && echo "    DL:      /tmp/iperf3_dl.log" || true
+$START_UE && $START_TRAFFIC && echo "    Ping:    $PING_LOG" || true
 $START_BROKER && echo "    Broker:  /tmp/zmq_broker.log" || true
 $START_GRAFANA && echo "    Grafana: /tmp/grafana.log" || true
 $START_GRAFANA && echo "    Ingest:  /tmp/ingestor.log" || true
