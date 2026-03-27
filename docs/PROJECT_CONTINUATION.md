@@ -147,8 +147,6 @@ Built a Python-based GNU Radio channel broker that is a strict superset of the C
 
 **Validation**: Pipeline now runs indefinitely at `--grc --fading --snr 28 --k-factor 3 --doppler 5`. 11/11 codelet sets loaded, 75,738+ PUSCH/PDSCH entries, SINR ~28 dB, iperf3 sending 10 Mbps UDP.
 
-**Documentation**: Created `SUPERVISOR_REPORT.md` — comprehensive technical report for supervisor covering the full project, why Python GRC was chosen over GNU Radio Companion, how the broker works, GUI visualization details, channel parameters, and all telemetry schemas.
-
 **GitHub setup**: Initialized git repository and pushed all project files, scripts, and documentation.
 
 ### Phase 12: UE Latency & Throughput Measurements
@@ -226,8 +224,7 @@ Clear SIR gradient confirms the interference is applied correctly. FAPI UL SNR i
 | `~/Desktop/ue_zmq.conf` | 57 | srsUE config (ZMQ ports 2000/2001, NR band 3) |
 | `~/Desktop/gnb_zmq.yaml` | — | gNB config reference |
 | `~/Desktop/ZMQ_CHANNEL_BROKER_DOCS.md` | 724 | Full channel broker documentation |
-| `docs/PROJECT_CONTINUATION.md` | — | This handoff document |
-| `~/Desktop/SUPERVISOR_REPORT.md` | — | Comprehensive supervisor report (project, GRC rationale, GUI, parameters) |
+| `docs/PROJECT_CONTINUATION.md` | — | This reference document |
 | `~/Desktop/PROJECT_SUMMARY.txt` | — | Concise project summary |
 | `~/Desktop/JBPF_MAC_TELEMETRY_PROMPT.md` | 469 | Original project architecture docs |
 | `~/Desktop/plots/*.png` | 15 files | Generated telemetry plots |
@@ -493,28 +490,8 @@ Parse with: regex `REC: (.*)"$`, then `.replace('\\"', '"')`, then `json.loads()
 | RRC lifecycle | 1 add → 3 proc → 1 remove | Correct attach/detach ✓ |
 | NGAP lifecycle | 3 started → 3 completed (all success) | Standard 5G flow ✓ |
 | jBPF hook latency | p50=192–384 ns, p99<1.5 µs | Negligible overhead ✓ |
-
----
-
-## What Could Be Done Next
-
-Potential directions the user might want to explore:
-
-1. ~~Run with downlink traffic (iperf3 server→UE)~~ → **DONE** (Phase 12: DL iperf3 port 5202 `--reverse`, ping RTT monitoring)
-2. **Compare multiple SNR levels** side-by-side (collect at 10, 20, 28, 30 dB and overlay)
-3. ~~Time-frequency selective fading~~ → **DONE** (Phase 10: EPA/EVA/ETU FIR fading in GRC broker)
-4. **Multi-UE scenarios** (attach 2+ UEs simultaneously)
-5. **Compile ue_contexts codelets** to get the 11th codelet set working
-6. **Anomaly detection / ML** on the telemetry streams
-7. **Per-window (differential) stats** instead of cumulative — diff consecutive messages
-8. **Longer collection runs** with periodic UE re-attach after fading disconnects
-9. ~~EPA/EVA/ETU delay profiles~~ → **DONE** (Phase 10: `--profile epa|eva|etu` in GRC broker)
-10. **Automate multi-SNR comparison** — script that collects at multiple SNR levels and generates comparative plots
-11. **Collect anomalous dataset** — Supervisor task #3: run with aggressive impairments, capture telemetry for ML training
-12. ~~Push to private GitHub repo~~ → **DONE** (Phase 11: initialized git repo, pushed all files)
-13. ~~Add DL iperf3 mode to launch script~~ → **DONE** (Phase 12: `--reverse` mode, port 5202)
 14. **Frequency-offset auto-recovery** — test if srsUE survives larger CFO values (>200 Hz)
 15. **Multi-scenario automated sweep** — script cycling through all `--scenario` profiles with automatic data collection
 16. ~~Add interference simulation~~ → **DONE** (Phase 13: CW+narrowband in GRC, CW in C, `--interference-type/--sir` flags, validated)
 17. **Stress scenario expansion** — add disk I/O, IRQ affinity, NUMA, cache-thrashing scenarios to `stress_anomaly_collect.sh`
-18. **Git polish** — commit `bep_extension/`, fix UE_IP bug in git repo copy of `launch_mac_telemetry.sh`, push all Phase 12–13 changes
+18. **Git polish** — commit `project_extension/`, fix UE_IP bug in git repo copy of `launch_mac_telemetry.sh`, push all Phase 12–13 changes

@@ -674,11 +674,7 @@ channel emulator existed for srsRAN's ZMQ radio interface.
     15 seconds for `tun_srsue` to obtain an IP before starting the iperf3 client.
     Confirmed: pipeline now runs indefinitely with `--grc --fading --snr 28 --k-factor 3 --doppler 5`.
 
-20. **Supervisor report** — Created `SUPERVISOR_REPORT.md`, a comprehensive
-    technical report documenting the full project, GRC broker design rationale,
-    GUI visualization, channel parameters, and all telemetry schemas.
-
-21. **GitHub repository setup** — Initialized git repository, added all project
+20. **GitHub repository setup** — Initialized git repository, added all project
     files, documentation, and configuration, pushed to GitHub for version control.
 
 ---

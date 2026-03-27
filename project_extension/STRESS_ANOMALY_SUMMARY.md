@@ -160,4 +160,4 @@ realistic training set for anomaly detection.
 ---
 
 *Dataset: `~/Desktop/dataset/stress_20260325_204950` (23 scenarios, fading baseline)*
-*Figures: `~/Desktop/bep_extension/figures/`*
+*Figures: `~/Desktop/project_extension/figures/`*

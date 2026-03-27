@@ -37,7 +37,7 @@ jrtc (runtime controller)
 ZMQ broker ports: gNB 4000/4001 <-> broker <-> UE 2000/2001.
 
 
-Key Files (repository: scripts/, docs/, bep_extension/)
+Key Files (repository: scripts/, docs/, project_extension/)
 ---------------------------------------------------------
 scripts/zmq_channel_broker.c (~560 lines)
     C broker — Rician/Rayleigh flat fading + AWGN + CW interference.
@@ -86,11 +86,11 @@ docs/PROJECT_CONTINUATION.md
     Full project reference — all phases, file inventory, port map, system
     configuration, how-to-run examples, telemetry schemas, and data quirks.
 
-bep_extension/
+project_extension/
     Anomalous dataset extension docs and figures.
     - STRESS_ANOMALY_EXTENSION.md — technical write-up of the stress injection
       methodology and results
-    - STRESS_ANOMALY_SUMMARY.md — plain-language summary for supervisors
+    - STRESS_ANOMALY_SUMMARY.md — plain-language summary of the anomalous dataset work
     - plot_bep_presentation.py — figure generation script
     - figures/ — 5 PNG figures (hook overview, signal space, anomaly heatmap,
       SINR/MCS invariance, category summary)
@@ -118,7 +118,7 @@ Phase 10 (Stability Fix): Diagnosed pipeline crashes as iperf3 TUN race
   condition. Fixed: launch script waits up to 15s for TUN IP.
 
 Phase 11 (Stress Scenarios): stress_anomaly_collect.sh with 20+ stressor
-  scenarios across CPU/memory/network categories. bep_extension/ figures.
+  scenarios across CPU/memory/network categories. project_extension/ figures.
 
 Phase 12 (UE Latency & Throughput): DL iperf3 port 5202 --reverse, continuous
   ping RTT monitoring, measure_scenario() in stress script, manifest CSV
