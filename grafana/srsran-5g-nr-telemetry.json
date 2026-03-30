@@ -1898,6 +1898,190 @@
       ],
       "title": "BSR Buffer",
       "type": "stat"
+    },
+    {
+      "id": 108,
+      "type": "row",
+      "title": "UE Application Layer (iperf3 + Ping)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 100
+      },
+      "panels": []
+    },
+    {
+      "id": 109,
+      "type": "timeseries",
+      "title": "UL Throughput (Mbps)",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 101
+      },
+      "datasource": "srsRAN InfluxDB",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "lineWidth": 2
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": "srsRAN InfluxDB",
+          "query": "SELECT mean(\"bitrate_mbps\") AS \"UL Mbps\" FROM \"ue_ul_throughput\" WHERE $timeFilter GROUP BY time($__interval) fill(null)",
+          "rawQuery": true
+        }
+      ]
+    },
+    {
+      "id": 110,
+      "type": "timeseries",
+      "title": "DL Throughput (Mbps)",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 101
+      },
+      "datasource": "srsRAN InfluxDB",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "lineWidth": 2
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": "srsRAN InfluxDB",
+          "query": "SELECT mean(\"bitrate_mbps\") AS \"DL Mbps\" FROM \"ue_dl_throughput\" WHERE $timeFilter GROUP BY time($__interval) fill(null)",
+          "rawQuery": true
+        }
+      ]
+    },
+    {
+      "id": 111,
+      "type": "timeseries",
+      "title": "Ping RTT (ms)",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 101
+      },
+      "datasource": "srsRAN InfluxDB",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": {
+            "lineWidth": 2
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": "srsRAN InfluxDB",
+          "query": "SELECT mean(\"rtt_ms\") AS \"RTT ms\" FROM \"ue_rtt\" WHERE $timeFilter GROUP BY time($__interval) fill(null)",
+          "rawQuery": true
+        }
+      ]
+    },
+    {
+      "id": 112,
+      "type": "timeseries",
+      "title": "DL Jitter (ms)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 109
+      },
+      "datasource": "srsRAN InfluxDB",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": {
+            "lineWidth": 2
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": "srsRAN InfluxDB",
+          "query": "SELECT mean(\"jitter_ms\") AS \"Jitter ms\" FROM \"ue_dl_throughput\" WHERE $timeFilter GROUP BY time($__interval) fill(null)",
+          "rawQuery": true
+        }
+      ]
+    },
+    {
+      "id": 113,
+      "type": "timeseries",
+      "title": "DL Packet Loss (%)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 109
+      },
+      "datasource": "srsRAN InfluxDB",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "lineWidth": 2
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": "srsRAN InfluxDB",
+          "query": "SELECT mean(\"loss_pct\") AS \"Loss %\" FROM \"ue_dl_throughput\" WHERE $timeFilter GROUP BY time($__interval) fill(null)",
+          "rawQuery": true
+        }
+      ]
     }
   ],
   "refresh": "5s",

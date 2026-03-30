@@ -106,8 +106,10 @@ def make_points(ts, schema, pkg, data):
             cnt_rsrp = safe_int(s.get("cntRsrp", 0))
             min_sinr = safe_int(s.get("minSinr", 0))
             max_sinr = safe_int(s.get("maxSinr", 0))
-            if min_sinr == UINT32_MAX:
+            if min_sinr == UINT32_MAX or min_sinr == 32767:
                 min_sinr = 0
+            if max_sinr == -32768:
+                max_sinr = 0
             points.append({
                 "measurement": "mac_crc_stats",
                 "tags": {"ue": str(ue)},

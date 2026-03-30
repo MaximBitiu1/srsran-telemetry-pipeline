@@ -91,12 +91,14 @@ fail()  { echo -e "${RED}[FAIL]${NC}  $*"; exit 1; }
 START_UE=true
 START_TRAFFIC=true
 START_BROKER=true
+START_WATCHDOG=true
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --no-ue)      START_UE=false; START_TRAFFIC=false ;;
-    --no-traffic) START_TRAFFIC=false ;;
-    --no-broker)  START_BROKER=false ;;
-    --no-grafana) START_GRAFANA=false ;;
+    --no-ue)        START_UE=false; START_TRAFFIC=false ;;
+    --no-traffic)   START_TRAFFIC=false ;;
+    --no-broker)    START_BROKER=false ;;
+    --no-grafana)   START_GRAFANA=false ;;
+    --no-watchdog)  START_WATCHDOG=false ;;
     --grc)        USE_GRC_BROKER=true ;;
     --gui)        USE_GUI=true; USE_GRC_BROKER=true ;;
     --fading)     ZMQ_BROKER_FADING=true ;;
@@ -476,6 +478,16 @@ else
   info "[$STEP/$TOTAL_STEPS] Skipping UE (--no-ue flag)"
 fi
 
+# ── UE Watchdog (restarts UE + traffic if TUN drops) ─────────────────────────
+if $START_UE && $START_WATCHDOG; then
+  export SUDO_PASS SRSUE_BIN UE_CONF LOG_DIR
+  export IPERF_TARGET IPERF_PORT IPERF_DL_PORT
+  export IPERF_BITRATE IPERF_DL_BITRATE IPERF_DURATION IPERF_PKT_LEN
+  export PING_LOG START_TRAFFIC
+  bash "$HOME/Desktop/ue_watchdog.sh" >>/tmp/ue_watchdog.log 2>&1 &
+  ok "UE watchdog running (PID $!, log: /tmp/ue_watchdog.log)"
+fi
+
 # ── Step N: Grafana Dashboard (optional) ─────────────────────────────────────
 if $START_GRAFANA; then
   next_step
@@ -526,6 +538,24 @@ if $START_GRAFANA; then
   else
     ok "Ingestor already running"
   fi
+
+  # Start UE traffic ingestor (iperf3 UL/DL + ping → InfluxDB)
+  if $START_UE && ! pgrep -f "ue_traffic_ingestor" &>/dev/null; then
+    PYTHONUNBUFFERED=1 python3 "$HOME/Desktop/ue_traffic_ingestor.py" \
+      --ul /tmp/iperf3.log \
+      --dl /tmp/iperf3_dl.log \
+      --ping "$PING_LOG" \
+      --db "$INFLUXDB_DB" \
+      --host "$INFLUXDB_HOST" \
+      --port "$INFLUXDB_PORT" \
+      >/tmp/traffic_ingestor.log 2>&1 &
+    sleep 1
+    if pgrep -f "ue_traffic_ingestor" &>/dev/null; then
+      ok "UE traffic ingestor running (PID $(pgrep -f 'ue_traffic_ingestor' | head -1))"
+    else
+      warn "UE traffic ingestor may not have started — check /tmp/traffic_ingestor.log"
+    fi
+  fi
 fi
 
 # ── Summary ──────────────────────────────────────────────────────────────────
@@ -560,6 +590,7 @@ echo "    Reverse proxy   PID $(pid_of 'srsran_reverse_proxy')   (port $REVERSE_
 echo "    Decoder         PID $(pid_of 'decoder run')   (gRPC $DECODER_GRPC_PORT, data UDP $DECODER_DATA_PORT)"
 echo "    Codelets        $LOADED/${#CODELET_SETS[@]} sets loaded"
 $START_UE && echo "    srsUE           PID $(pid_of 'srsue')" || true
+$START_UE && $START_WATCHDOG && echo "    UE watchdog     PID $(pid_of 'ue_watchdog.sh')" || true
 if $START_GRAFANA; then
   echo "    Grafana         PID $(pid_of 'grafana.*server')   (http://localhost:3000)"
   echo "    Ingestor        PID $(pid_of 'telemetry_to_influxdb')"
@@ -574,9 +605,11 @@ $START_UE && echo "    UE:      $LOG_UE" || true
 $START_UE && $START_TRAFFIC && echo "    UL:      /tmp/iperf3.log" || true
 $START_UE && $START_TRAFFIC && echo "    DL:      /tmp/iperf3_dl.log" || true
 $START_UE && $START_TRAFFIC && echo "    Ping:    $PING_LOG" || true
+$START_UE && $START_WATCHDOG && echo "    Watchdog:/tmp/ue_watchdog.log" || true
 $START_BROKER && echo "    Broker:  /tmp/zmq_broker.log" || true
 $START_GRAFANA && echo "    Grafana: /tmp/grafana.log" || true
 $START_GRAFANA && echo "    Ingest:  /tmp/ingestor.log" || true
+$START_GRAFANA && $START_UE && echo "    Traffic: /tmp/traffic_ingestor.log" || true
 echo ""
 echo "  View live telemetry:"
 echo "    tail -f $LOG_DECODER"
