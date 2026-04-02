@@ -97,6 +97,7 @@ project_extension/  Stress anomaly extension -- docs, figures, analysis scripts
 - [GRC Parameter Presets](docs/grcParamPreset.md) -- Safe parameter ranges and recommended configurations
 - [**Anomaly Dataset Collection**](docs/ANOMALY_DATASET.md) -- Both dataset types: stress anomalies (23 scenarios) and realistic channel scenarios (10 scenarios), per-scenario results, key findings, reproduction steps, dataset structure, and data quirks
 - [**Anomaly Collection Progress Report**](docs/ANOMALY_COLLECTION_REPORT.md) -- Full progress report with plots: channel scenario comparison, stress hook latency analysis, signal-space scatter, and hook latency orthogonality demonstration
+- [**Janus vs Standard Logs**](docs/comparison/JANUS_VS_STANDARD_LOGS.md) -- Side-by-side comparison of Janus and standard srsRAN metrics: overlapping metric validation, correlation analysis, 13 plots, CPU overhead, and capability matrix
 
 
 
