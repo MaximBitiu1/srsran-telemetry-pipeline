@@ -87,7 +87,7 @@ Generates 7 comparison plots from a completed dataset:
 
 ### 2.4 `plot_bep_presentation.py` (this directory)
 
-Generates 5 presentation figures with improved layout and annotations.
+Generates 5 supervisor-presentation figures with improved layout and annotations.
 
 ---
 
@@ -309,9 +309,9 @@ anomaly signals.
 │       ├── summary.txt
 │       ├── baseline/, cpu/, memory/, sched/, traffic/, combined/
 │       └── plots/                 — 7 comparison PNGs (with duUeIndex bug fixed)
-└── project_extension/
+└── bep_extension/
     ├── STRESS_ANOMALY_EXTENSION.md (this file)
-    ├── plot_bep_presentation.py    — 5 presentation figures
+    ├── plot_bep_presentation.py    — 5 supervisor presentation figures
     └── figures/
         ├── fig1_hook_bsr_overview.png     — per-scenario hook + BSR bar charts
         ├── fig2_signal_space.png          — hook vs BSR scatter (log-log)
@@ -340,7 +340,7 @@ bash /tmp/run_stress_fading.sh
 python3 ~/Desktop/plot_stress_comparison.py ~/Desktop/dataset/<run_dir>
 
 # Generate presentation figures
-python3 ~/Desktop/project_extension/plot_bep_presentation.py ~/Desktop/dataset/<run_dir>
+python3 ~/Desktop/bep_extension/plot_bep_presentation.py ~/Desktop/dataset/<run_dir>
 ```
 
 ---

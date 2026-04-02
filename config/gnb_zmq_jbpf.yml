@@ -38,8 +38,17 @@ cell_cfg:
     prach_config_index: 1
   pdsch:
     mcs_table: qam64
+    max_consecutive_kos: 10000
   pusch:
     mcs_table: qam64
+    max_consecutive_kos: 10000
+  pucch:
+    max_consecutive_kos: 10000
+  sib:
+    t310: 2000
+    n310: 20
+    n311: 10
+    t311: 30000
 
 jbpf:
   jbpf_run_path: "/tmp"
@@ -60,6 +69,34 @@ jbpf:
   jbpf_maint_cpu: 0
   jbpf_maint_policy: 0
   jbpf_maint_priority: 0
+
+srbs:
+  - srb_id: 1
+    rlc:
+      tx:
+        sn: 12
+        t-poll-retransmit: 45
+        max-retx-threshold: 32
+        poll-pdu: -1
+        poll-byte: -1
+        queue-size: 32
+      rx:
+        sn: 12
+        t-reassembly: 35
+        t-status-prohibit: 0
+  - srb_id: 2
+    rlc:
+      tx:
+        sn: 12
+        t-poll-retransmit: 45
+        max-retx-threshold: 32
+        poll-pdu: -1
+        poll-byte: -1
+        queue-size: 32
+      rx:
+        sn: 12
+        t-reassembly: 35
+        t-status-prohibit: 0
 
 log:
   filename: /tmp/gnb.log

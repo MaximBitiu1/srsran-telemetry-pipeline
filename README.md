@@ -6,7 +6,7 @@ Real-time telemetry collection, channel emulation, and anomaly dataset generatio
 
 This pipeline instruments an srsRAN Project gNB with approximately 60 eBPF codelets across the MAC, RLC, PDCP, FAPI, RRC, and NGAP protocol layers, extracting 17 telemetry schemas without modification to the gNB source code. A custom ZMQ channel broker (available in C and Python/GNU Radio variants) injects calibrated RF impairments -- AWGN, Rician/Rayleigh fading, 3GPP EPA/EVA/ETU frequency-selective fading, carrier frequency offset, burst drops, and CW/narrowband interference -- into the IQ sample stream between the gNB and a software UE. Telemetry is ingested into InfluxDB and visualised on a 39-panel Grafana dashboard with 5-second auto-refresh. An optional real-time QT GUI provides spectrum, constellation, IQ waveform, and waterfall displays with interactive parameter control.
 
-A stress injection framework applies 23 system-level scenarios (CPU, memory, scheduling, traffic, and combined stressors) to generate labelled anomalous datasets suitable for anomaly detection research.
+A stress injection framework applies 23 system-level scenarios (CPU, memory, scheduling, traffic, and combined stressors) to generate labelled anomalous datasets suitable for anomaly detection research. A separate realistic channel dataset collector runs 10 real-world-grounded GRC channel scenarios (baselines, time-varying, steady impairment, and RLF cycles), exporting telemetry to CSV and HDF5.
 
 ## Architecture
 
@@ -46,6 +46,12 @@ gNB (jBPF) --ZMQ--> Channel Broker --ZMQ--> srsUE --> iperf3 UL :5201
 
 # Collect stress anomaly dataset (23 scenarios)
 ./scripts/stress_anomaly_collect.sh --duration 180
+
+# Collect realistic channel dataset (10 scenarios, ~37 min)
+./scripts/collect_channel_realistic.sh --duration 180 --output ~/channel_dataset
+
+# Export channel dataset logs to CSV + HDF5
+python3 scripts/export_channel_dataset.py ~/channel_dataset
 ```
 
 The Grafana dashboard is accessible at `http://localhost:3000` (admin / admin).
@@ -91,6 +97,12 @@ project_extension/  Stress anomaly extension -- docs, figures, analysis scripts
 - [GRC Parameter Presets](docs/grcParamPreset.md) -- Safe parameter ranges and recommended configurations
 - [Stress Anomaly Extension](project_extension/STRESS_ANOMALY_EXTENSION.md) -- Stress injection methodology and per-scenario results
 - [Stress Anomaly Summary](project_extension/STRESS_ANOMALY_SUMMARY.md) -- Concise summary of anomaly classification findings
+
+## Key Findings
+
+- **Hook latency** (`jbpf_out_perf_list`) is the only metric that reveals OS-level gNB anomalies — scheduler priority demotion causes 40–103× latency spikes invisible to E2SM-KPM or any standard O-RAN interface.
+- **Multi-layer cascade**: channel impairments produce correlated signatures across SINR → MCS → HARQ → BSR → RLC delay, observable simultaneously at 1 ms granularity (vs 10 ms E2SM-KPM minimum period).
+- **14/23 stress scenarios** produce anomaly signatures distinct from the GRC channel broker baseline, with sched demotion and traffic flood as the two most distinguishable anomaly classes.
 
 ## Prerequisites
 

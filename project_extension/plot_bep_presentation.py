@@ -9,7 +9,7 @@ Usage:
     python3 plot_bep_presentation.py [dataset_dir]
 
 Default dataset: ~/Desktop/dataset/stress_20260325_204950
-Output:          ~/Desktop/project_extension/figures/
+Output:          ~/Desktop/bep_extension/figures/
 """
 import json, re, sys, csv as csv_mod
 import numpy as np

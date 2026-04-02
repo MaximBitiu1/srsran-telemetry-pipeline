@@ -74,6 +74,10 @@ ping -> iperf3 -> srsUE -> Decoder -> Reverse Proxy -> gNB -> ZMQ Broker -> jrtc
 | `scripts/telemetry_to_influxdb.py` (616 lines) | Tails `/tmp/decoder.log`, parses 16 protobuf schema types, converts cumulative MAC counters to per-window deltas, writes to InfluxDB via HTTP line protocol. |
 | `scripts/plot_all_telemetry.py` (944 lines) | Generates 15 PNGs covering all 17 telemetry schemas from a decoder log file. |
 | `scripts/stress_anomaly_collect.sh` (~830 lines) | Applies 23 system-level stressors (CPU, memory, scheduling, traffic) to a running pipeline and captures labelled MAC telemetry per scenario. Records per-scenario UL/DL throughput and ping RTT. Outputs `manifest.csv`. |
+| `scripts/collect_channel_realistic.sh` | Automated multi-scenario realistic channel dataset collector. Runs 10 real-world-grounded GRC channel scenarios (baselines, time-varying, steady impairment, RLF cycles), each for a configurable duration. Full pipeline teardown/restart between scenarios. Exports to CSV + HDF5 via `export_channel_dataset.py`. Outputs `manifest.csv` and `summary.txt`. |
+| `scripts/export_channel_dataset.py` | Converts decoder logs from a channel dataset run into structured CSV and HDF5 files. Handles binary log files (reads raw bytes). Extracts 11 telemetry schemas including the novel `jbpf_out_perf_list` hook-latency schema. Supports `--format csv\|hdf5\|both`. |
+| `scripts/plot_stress_comparison.py` | Cross-scenario comparison plots for stress anomaly datasets. Generates 7 PNGs: hook latency bars, BSR bars, HARQ+SINR, normalised anomaly heatmap, time-series overlay, multi-hook grouped bars, summary dashboard. |
+| `scripts/add_zmq_subscribers.sh` | Registers UE1 and UE2 subscriber entries in Open5GS via the WebUI API. Required for jrtc-apps ZMQ mode. |
 
 ### 3.2 Launch Script Flags
 
@@ -88,7 +92,9 @@ ping -> iperf3 -> srsUE -> Decoder -> Reverse Proxy -> gNB -> ZMQ Broker -> jrtc
 --profile P        3GPP delay profile: epa | eva | etu (implies --grc)
 --cfo N            Carrier frequency offset in Hz (implies --grc)
 --drop-prob N      Subframe drop probability 0--0.25 (implies --grc)
---scenario S       Time-varying scenario: drive-by | urban-walk | edge-of-cell
+--scenario S       Time-varying scenario: drive-by | urban-walk | edge-of-cell | rlf-cycle
+--iperf-bitrate N  UL iperf3 target bitrate (default: 10M, e.g. 25M)
+--iperf-dl-bitrate N  DL iperf3 target bitrate (default: 5M)
 --interference-type T   DL interferer: none (default) | cw | narrowband
 --interference-freq Hz  Interferer frequency offset (default: 1e6 Hz)
 --sir N            Signal-to-interference ratio in dB (default: 20)

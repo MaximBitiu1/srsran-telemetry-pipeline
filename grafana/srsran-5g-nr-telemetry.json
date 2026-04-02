@@ -1537,7 +1537,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 93
+        "y": 110
       },
       "id": 107,
       "title": "Summary Statistics",
@@ -1578,7 +1578,7 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 94
+        "y": 111
       },
       "id": 30,
       "options": {
@@ -1639,7 +1639,7 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 94
+        "y": 111
       },
       "id": 31,
       "options": {
@@ -1699,7 +1699,7 @@
         "h": 4,
         "w": 4,
         "x": 8,
-        "y": 94
+        "y": 111
       },
       "id": 32,
       "options": {
@@ -1759,7 +1759,7 @@
         "h": 4,
         "w": 4,
         "x": 12,
-        "y": 94
+        "y": 111
       },
       "id": 33,
       "options": {
@@ -1820,7 +1820,7 @@
         "h": 4,
         "w": 4,
         "x": 16,
-        "y": 94
+        "y": 111
       },
       "id": 34,
       "options": {
@@ -1873,7 +1873,7 @@
         "h": 4,
         "w": 4,
         "x": 20,
-        "y": 94
+        "y": 111
       },
       "id": 35,
       "options": {
@@ -1908,7 +1908,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 100
+        "y": 93
       },
       "panels": []
     },
@@ -1920,14 +1920,17 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 101
+        "y": 94
       },
       "datasource": "srsRAN InfluxDB",
       "fieldConfig": {
         "defaults": {
           "unit": "none",
           "custom": {
-            "lineWidth": 2
+            "lineWidth": 2,
+            "drawStyle": "line",
+            "showPoints": "never",
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -1941,7 +1944,7 @@
         {
           "refId": "A",
           "datasource": "srsRAN InfluxDB",
-          "query": "SELECT mean(\"bitrate_mbps\") AS \"UL Mbps\" FROM \"ue_ul_throughput\" WHERE $timeFilter GROUP BY time($__interval) fill(null)",
+          "query": "SELECT mean(\"bitrate_mbps\") AS \"UL Mbps\" FROM \"ue_ul_throughput\" WHERE $timeFilter GROUP BY time(1s) fill(none)",
           "rawQuery": true
         }
       ]
@@ -1954,14 +1957,17 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 101
+        "y": 94
       },
       "datasource": "srsRAN InfluxDB",
       "fieldConfig": {
         "defaults": {
           "unit": "none",
           "custom": {
-            "lineWidth": 2
+            "lineWidth": 2,
+            "drawStyle": "line",
+            "showPoints": "never",
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -1975,7 +1981,7 @@
         {
           "refId": "A",
           "datasource": "srsRAN InfluxDB",
-          "query": "SELECT mean(\"bitrate_mbps\") AS \"DL Mbps\" FROM \"ue_dl_throughput\" WHERE $timeFilter GROUP BY time($__interval) fill(null)",
+          "query": "SELECT mean(\"bitrate_mbps\") AS \"DL Mbps\" FROM \"ue_dl_throughput\" WHERE $timeFilter GROUP BY time(1s) fill(none)",
           "rawQuery": true
         }
       ]
@@ -1988,14 +1994,17 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 101
+        "y": 94
       },
       "datasource": "srsRAN InfluxDB",
       "fieldConfig": {
         "defaults": {
           "unit": "ms",
           "custom": {
-            "lineWidth": 2
+            "lineWidth": 2,
+            "drawStyle": "line",
+            "showPoints": "never",
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -2009,7 +2018,7 @@
         {
           "refId": "A",
           "datasource": "srsRAN InfluxDB",
-          "query": "SELECT mean(\"rtt_ms\") AS \"RTT ms\" FROM \"ue_rtt\" WHERE $timeFilter GROUP BY time($__interval) fill(null)",
+          "query": "SELECT mean(\"rtt_ms\") AS \"RTT ms\" FROM \"ue_rtt\" WHERE $timeFilter GROUP BY time(1s) fill(none)",
           "rawQuery": true
         }
       ]
@@ -2022,14 +2031,17 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 109
+        "y": 102
       },
       "datasource": "srsRAN InfluxDB",
       "fieldConfig": {
         "defaults": {
           "unit": "ms",
           "custom": {
-            "lineWidth": 2
+            "lineWidth": 2,
+            "drawStyle": "line",
+            "showPoints": "never",
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -2043,7 +2055,7 @@
         {
           "refId": "A",
           "datasource": "srsRAN InfluxDB",
-          "query": "SELECT mean(\"jitter_ms\") AS \"Jitter ms\" FROM \"ue_dl_throughput\" WHERE $timeFilter GROUP BY time($__interval) fill(null)",
+          "query": "SELECT mean(\"jitter_ms\") AS \"Jitter ms\" FROM \"ue_dl_throughput\" WHERE $timeFilter GROUP BY time(1s) fill(none)",
           "rawQuery": true
         }
       ]
@@ -2056,14 +2068,17 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 109
+        "y": 102
       },
       "datasource": "srsRAN InfluxDB",
       "fieldConfig": {
         "defaults": {
           "unit": "percent",
           "custom": {
-            "lineWidth": 2
+            "lineWidth": 2,
+            "drawStyle": "line",
+            "showPoints": "never",
+            "spanNulls": false
           },
           "min": 0
         },
@@ -2078,7 +2093,7 @@
         {
           "refId": "A",
           "datasource": "srsRAN InfluxDB",
-          "query": "SELECT mean(\"loss_pct\") AS \"Loss %\" FROM \"ue_dl_throughput\" WHERE $timeFilter GROUP BY time($__interval) fill(null)",
+          "query": "SELECT mean(\"loss_pct\") AS \"Loss %\" FROM \"ue_dl_throughput\" WHERE $timeFilter GROUP BY time(1s) fill(none)",
           "rawQuery": true
         }
       ]
