@@ -95,14 +95,9 @@ project_extension/  Stress anomaly extension -- docs, figures, analysis scripts
 - [Hook Points Report](docs/JBPF_HOOK_POINTS_REPORT.md) -- Complete inventory of 68 jBPF instrumentation points
 - [MAC Telemetry Prompt](docs/JBPF_MAC_TELEMETRY_PROMPT.md) -- MAC codelet architecture, data formats, step-by-step launch guide
 - [GRC Parameter Presets](docs/grcParamPreset.md) -- Safe parameter ranges and recommended configurations
-- [Stress Anomaly Extension](project_extension/STRESS_ANOMALY_EXTENSION.md) -- Stress injection methodology and per-scenario results
-- [Stress Anomaly Summary](project_extension/STRESS_ANOMALY_SUMMARY.md) -- Concise summary of anomaly classification findings
+- [**Anomaly Dataset Collection**](docs/ANOMALY_DATASET.md) -- Both dataset types: stress anomalies (23 scenarios) and realistic channel scenarios (10 scenarios), per-scenario results, key findings, reproduction steps, dataset structure, and data quirks
 
-## Key Findings
 
-- **Hook latency** (`jbpf_out_perf_list`) is the only metric that reveals OS-level gNB anomalies — scheduler priority demotion causes 40–103× latency spikes invisible to E2SM-KPM or any standard O-RAN interface.
-- **Multi-layer cascade**: channel impairments produce correlated signatures across SINR → MCS → HARQ → BSR → RLC delay, observable simultaneously at 1 ms granularity (vs 10 ms E2SM-KPM minimum period).
-- **14/23 stress scenarios** produce anomaly signatures distinct from the GRC channel broker baseline, with sched demotion and traffic flood as the two most distinguishable anomaly classes.
 
 ## Prerequisites
 
