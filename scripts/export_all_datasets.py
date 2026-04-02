@@ -17,8 +17,8 @@ from pathlib import Path
 # Configuration
 # ---------------------------------------------------------------------------
 
-STRESS_DIR = Path.home() / "Desktop" / "dataset" / "stress_20260325_204950"
-CHANNEL_DIR = Path.home() / "Desktop" / "channel_dataset" / "20260401_180521"
+STRESS_DIR = Path.home() / "Desktop/datasets/stress_anomaly"
+CHANNEL_DIR = Path.home() / "Desktop/datasets/channel"
 
 GHOST_UE = 513  # duUeIndex to filter out
 

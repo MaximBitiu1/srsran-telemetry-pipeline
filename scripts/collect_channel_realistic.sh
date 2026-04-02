@@ -21,7 +21,7 @@
 #    10 scenarios × (180s collect + 30s settle + 15s cooldown) ≈ 37.5 min
 #
 #  Output:
-#    ~/Desktop/channel_dataset/<timestamp>/
+#    ~/Desktop/datasets/channel/<timestamp>/
 #      ├── manifest.csv
 #      ├── B1_pedestrian_indoor_office.log
 #      ├── ...

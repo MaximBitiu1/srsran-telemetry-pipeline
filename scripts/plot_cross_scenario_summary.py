@@ -13,8 +13,8 @@ import numpy as np
 # Configuration
 # ---------------------------------------------------------------------------
 
-STRESS_DIR = Path.home() / "Desktop" / "dataset" / "stress_20260325_204950"
-CHANNEL_DIR = Path.home() / "Desktop" / "channel_dataset" / "20260401_180521"
+STRESS_DIR = Path.home() / "Desktop/datasets/stress_anomaly"
+CHANNEL_DIR = Path.home() / "Desktop/datasets/channel"
 
 FAPI_UL_HOOK = "fapi_ul_tti_request"
 

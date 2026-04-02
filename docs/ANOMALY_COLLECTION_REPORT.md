@@ -18,7 +18,7 @@ Together, the datasets contain 30 unique scenario configurations (23 stress + 7 
 
 ## 2. Infrastructure Anomalies (Stress Dataset)
 
-**Dataset location:** `~/Desktop/dataset/stress_20260325_204950/`  
+**Dataset location:** `~/Desktop/datasets/stress_anomaly/`  
 **Baseline configuration:** Rician fading, K=3 dB, SNR=25 dB, fd=5 Hz (C broker)  
 **Collection per scenario:** 25 s settle, 180 s capture, 10 s cooldown
 
@@ -185,7 +185,7 @@ These scenarios combine two stressor types simultaneously to produce compound fa
 
 ## 3. Channel Anomalies (Realistic Channel Dataset)
 
-**Dataset location:** `~/Desktop/channel_dataset/20260401_180521/`  
+**Dataset location:** `~/Desktop/datasets/channel/`  
 **Broker:** GRC Python broker (`srsran_channel_broker.py`) with frequency-selective fading  
 **UL channel:** Flat Rician (K=6, SNR=25) for all scenarios to maintain PUCCH stability
 
