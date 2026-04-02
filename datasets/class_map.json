@@ -1,0 +1,6 @@
+{
+  "0": "normal",
+  "1": "scheduler_fault",
+  "2": "traffic_flood",
+  "3": "channel_degradation"
+}

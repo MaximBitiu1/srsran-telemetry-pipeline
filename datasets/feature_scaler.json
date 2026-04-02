@@ -1,0 +1,78 @@
+{
+  "hook_p99_us_fapi_ul": {
+    "mean": 5.805614,
+    "std": 5.411382
+  },
+  "hook_p99_us_fapi_dl": {
+    "mean": 4.933377,
+    "std": 4.401584
+  },
+  "hook_p99_us_pdcp_ul_deliver": {
+    "mean": 3.131222,
+    "std": 2.961234
+  },
+  "hook_p99_us_pdcp_ul_rx": {
+    "mean": 4.144838,
+    "std": 3.865222
+  },
+  "hook_p99_us_rlc_ul_rx": {
+    "mean": 3.134645,
+    "std": 2.848228
+  },
+  "hook_p99_us_rlc_ul_deliver": {
+    "mean": 4.951349,
+    "std": 4.729702
+  },
+  "hook_p99_us_rlc_dl_tx": {
+    "mean": 7.127492,
+    "std": 94.453449
+  },
+  "hook_max_us_fapi_ul": {
+    "mean": 17.212531,
+    "std": 152.165744
+  },
+  "harq_mcs_avg": {
+    "mean": 16.337211,
+    "std": 13.23975
+  },
+  "harq_mcs_min": {
+    "mean": 0.0,
+    "std": 1.0
+  },
+  "harq_cons_retx": {
+    "mean": 0.164698,
+    "std": 0.7936
+  },
+  "harq_fail_rate": {
+    "mean": 0.000703,
+    "std": 0.010107
+  },
+  "crc_sinr_avg": {
+    "mean": 15.597205,
+    "std": 12.738125
+  },
+  "crc_harq_fail": {
+    "mean": 0.273457,
+    "std": 4.657734
+  },
+  "crc_success_rate": {
+    "mean": 0.564176,
+    "std": 0.49162
+  },
+  "bsr_kb": {
+    "mean": 2489.756387,
+    "std": 5138.621847
+  },
+  "rlc_throughput_kb": {
+    "mean": 37.907228,
+    "std": 142.874854
+  },
+  "rlc_lat_avg_us": {
+    "mean": 600.492702,
+    "std": 735.711832
+  },
+  "rlc_lat_max_us": {
+    "mean": 31237.876283,
+    "std": 86202.432388
+  }
+}
