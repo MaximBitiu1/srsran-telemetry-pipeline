@@ -1,0 +1,4 @@
+scenario_id,label,category,timestamp_utc,timestamp_unix,relative_s,event,preamble_index
+T1,driveby_vehicular_epa,time_varying,2026-04-02T10:27:11+02:00,1775118431.0,0.0,1,0
+T1,driveby_vehicular_epa,time_varying,2026-04-02T10:27:12+02:00,1775118432.0,1.0,1,0
+S1,cell_edge_cw_interference,steady_impairment,2026-04-02T10:53:10+02:00,1775119990.0,1.0,1,0

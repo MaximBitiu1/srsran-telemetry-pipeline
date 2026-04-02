@@ -8,9 +8,11 @@ __pycache__/
 *.log
 /tmp/
 
-# Large data
+# Large data (raw logs and ad-hoc CSVs)
 *.csv
 dataset/
+# Allow exported dataset CSVs
+!datasets/**/*.csv
 
 # OS
 .DS_Store

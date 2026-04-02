@@ -1,0 +1,2 @@
+scenario_id,label,category,timestamp_utc,timestamp_unix,relative_s,event
+T2,T2_driveby_epa_interference,unknown,2026-04-01T18:14:28+02:00,1775060068.0,69.0,1
