@@ -4,7 +4,7 @@
 
 The pipeline instruments an srsRAN Project gNB with approximately 60 eBPF codelets
 (via jBPF), routes the resulting telemetry through a decoder into InfluxDB, and
-visualises all metrics on a 39-panel Grafana dashboard. A custom ZMQ channel broker
+visualises all metrics on a 45-panel Grafana dashboard. A custom ZMQ channel broker
 sits between the gNB and a software UE (srsUE), injecting calibrated RF impairments
 into the IQ sample stream to produce realistic, time-varying MAC-layer telemetry. An
 optional stress injection framework generates labelled anomalous datasets.
@@ -145,7 +145,27 @@ ping -> iperf3 -> srsUE -> Decoder -> Reverse Proxy -> gNB -> ZMQ Broker -> jrtc
 
 ---
 
-## 5. Telemetry Schemas
+## 5. Grafana Dashboard
+
+45-panel dashboard at `http://localhost:3000` (admin / admin), auto-refresh 5 s.
+
+| Section | Panels | Metrics |
+|---|---|---|
+| MAC layer | 8 | HARQ failures, SINR, MCS, CRC success rate, BSR, UCI/CQI, timing advance |
+| RLC layer | 6 | UL/DL SDU delay (avg, max), PDU bytes, queue depth |
+| PDCP layer | 4 | UL/DL throughput bytes, latency |
+| FAPI layer | 6 | DL/UL MCS, PRB utilisation, TBS, RNTI allocation |
+| jBPF hook latency | 8 | p50/p90/p95/p99 per hook (FAPI UL/DL, MAC, RLC, PDCP) |
+| RRC / NGAP events | 5 | Attach/detach events, RRC procedures, NGAP procedures |
+| **UE application layer** | **5** | **UL throughput (Mbps), DL throughput (Mbps), ping RTT (ms), DL jitter (ms), DL packet loss (%)** |
+| Summary statistics | 6 | Current SINR, TX success %, HARQ failures, CQI, jBPF p50, BSR |
+| Hook latency histograms | 3 | Full histogram heatmaps for FAPI UL/DL and MAC-SCHED hooks |
+
+The UE application layer section uses `ue_traffic_ingestor.py` to parse iperf3 JSON output and ICMP ping results into InfluxDB (`iperf_ul`, `iperf_dl`, `ping_rtt` measurements), providing end-to-end visibility from radio channel to application throughput in a single dashboard.
+
+---
+
+## 6. Telemetry Schemas
 
 Eleven codelet sets load successfully at runtime (~60 codelets total, ~57 active).
 The `ue_contexts` set loads partially (9/11 codelets; 2 disabled due to a missing

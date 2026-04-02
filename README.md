@@ -20,7 +20,7 @@ gNB (jBPF) --ZMQ--> Channel Broker --ZMQ--> srsUE --> iperf3 UL :5201
     +-- jrtc -> gRPC Decoder -> /tmp/decoder.log
                                     |
                                     v
-                        telemetry_to_influxdb.py -> InfluxDB -> Grafana (39 panels)
+                        telemetry_to_influxdb.py -> InfluxDB -> Grafana (45 panels)
 ```
 
 ## Quick Start
