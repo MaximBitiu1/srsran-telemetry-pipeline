@@ -1,0 +1,5 @@
+scenario_id,label,category,timestamp_utc,timestamp_unix,relative_s,event,procedure_id,procedure,phase,success
+T1,driveby_vehicular_epa,time_varying,2026-04-02T10:27:12+02:00,1775118432.0,1.0,1,1,InitialUEMessage,completed,1
+T1,driveby_vehicular_epa,time_varying,2026-04-02T10:27:13+02:00,1775118433.0,2.0,1,3,InitialContextSetup,completed,1
+S1,cell_edge_cw_interference,steady_impairment,2026-04-02T10:53:10+02:00,1775119990.0,1.0,1,1,InitialUEMessage,completed,1
+S1,cell_edge_cw_interference,steady_impairment,2026-04-02T10:53:10+02:00,1775119990.0,1.0,1,3,InitialContextSetup,completed,1
