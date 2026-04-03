@@ -462,6 +462,36 @@ def make_points(ts, schema, pkg, data):
                 }
             })
 
+    elif schema == "crc_stats_custom":
+        # Custom SINR Analytics — variance + sliding window average
+        for s in data.get("stats", []):
+            ue = s.get("duUeIndex", 0)
+            if ue == 513 or ue >= 32:
+                continue
+            cnt_sinr = safe_int(s.get("cntSinr", 0))
+            min_sinr = safe_int(s.get("minSinr", 0))
+            max_sinr = safe_int(s.get("maxSinr", 0))
+            if min_sinr == 32767:
+                min_sinr = 0
+            if max_sinr == -32768:
+                max_sinr = 0
+            points.append({
+                "measurement": "mac_crc_stats_custom",
+                "tags": {"ue": str(ue)},
+                "time": iso_ts,
+                "fields": {
+                    "succ_tx": safe_int(s.get("succTx", 0)),
+                    "cnt_tx": safe_int(s.get("cntTx", 0)),
+                    "avg_sinr": safe_div(s.get("sumSinr", 0), cnt_sinr),
+                    "min_sinr": float(min_sinr),
+                    "max_sinr": float(max_sinr),
+                    "sinr_variance": safe_float(s.get("sinrVariance", 0)),
+                    "sinr_sliding_avg": safe_float(s.get("sinrSlidingAvg", 0)),
+                    "sinr_sliding_cnt": safe_int(s.get("sinrSlidingCnt", 0)),
+                    "tx_success_rate": safe_div(s.get("succTx", 0), s.get("cntTx", 1)) * 100.0,
+                }
+            })
+
     return points
 
 # ── Tail file implementation ─────────────────────────────────────────────────

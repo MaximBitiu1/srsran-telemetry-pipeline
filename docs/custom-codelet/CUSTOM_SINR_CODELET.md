@@ -274,3 +274,91 @@ The sliding average smooths over the last 16 CRC events (not time-based).
 At typical traffic rates this spans roughly 16 ms to a few hundred ms, providing
 a short-term trend indicator that is less noisy than the raw per-event SINR but
 more responsive than the 1-second window mean.
+
+---
+
+## Data Pipeline Integration
+
+The custom codelet data flows through the same pipeline as all other jBPF
+telemetry:
+
+```
+mac_sched_crc_stats_custom.o ──► protobuf/UDP ──► jrtc-ctl decoder
+                                                        │
+                                                   /tmp/decoder.log
+                                                        │
+                                              telemetry_to_influxdb.py
+                                                        │
+                                                   InfluxDB 1.x
+                                                 (srsran_telemetry)
+                                                        │
+                                                    Grafana
+                                        "Custom SINR Analytics" row
+```
+
+### Schema Registration
+
+The decoder must know the custom protobuf schema.  The `mac_stats_custom.yaml`
+deployment descriptor references the compiled `.pb` file and serializer `.so`,
+which the decoder loads automatically when the codelet set is loaded via
+`jrtc-ctl`.
+
+### InfluxDB Measurement
+
+The ingestor (`telemetry_to_influxdb.py`) maps `crc_stats_custom` to the
+`mac_crc_stats_custom` measurement with these fields:
+
+| InfluxDB Field | Source | Type |
+|----------------|--------|------|
+| `avg_sinr` | `sumSinr / cntSinr` | float |
+| `min_sinr` | `minSinr` | float |
+| `max_sinr` | `maxSinr` | float |
+| `sinr_variance` | `sinrVariance` | float |
+| `sinr_sliding_avg` | `sinrSlidingAvg` | float |
+| `sinr_sliding_cnt` | `sinrSlidingCnt` | int |
+| `succ_tx` | `succTx` | int |
+| `cnt_tx` | `cntTx` | int |
+| `tx_success_rate` | `succTx / cntTx * 100` | float |
+
+Tag: `ue` (UE index).
+
+---
+
+## Grafana Dashboard Panels
+
+Six new panels are added under the **"Custom SINR Analytics — Variance &
+Sliding Window"** row in the main Grafana dashboard:
+
+### Row 1 (y=116)
+
+| Panel | Type | Description |
+|-------|------|-------------|
+| **SINR: Window Mean vs Sliding Average** | Time series | Overlays the 1-second window mean SINR with the 16-sample sliding average. Min/max shown as dashed lines. |
+| **SINR Variance (dB²)** | Time series | Variance over time with threshold coloring: green (<5), yellow (5–20), red (>20). |
+
+### Row 2 (y=124)
+
+| Panel | Type | Description |
+|-------|------|-------------|
+| **TX Success Rate & Sliding Window Fill** | Time series | Dual-axis: CRC success rate (%) and sliding window sample count. |
+| **Current SINR Variance** | Gauge | Latest variance value with green/yellow/red thresholds. |
+| **Current Sliding Avg SINR** | Stat | Latest sliding average with color-coded quality indicator. |
+
+### InfluxQL Queries Used
+
+```sql
+-- SINR with sliding average
+SELECT mean("avg_sinr"), mean("sinr_sliding_avg"),
+       mean("min_sinr"), mean("max_sinr")
+FROM "mac_crc_stats_custom"
+WHERE $timeFilter GROUP BY time($__interval) fill(none)
+
+-- Variance
+SELECT mean("sinr_variance")
+FROM "mac_crc_stats_custom"
+WHERE $timeFilter GROUP BY time($__interval) fill(none)
+
+-- Current values
+SELECT last("sinr_variance") FROM "mac_crc_stats_custom" WHERE $timeFilter
+SELECT last("sinr_sliding_avg") FROM "mac_crc_stats_custom" WHERE $timeFilter
+```

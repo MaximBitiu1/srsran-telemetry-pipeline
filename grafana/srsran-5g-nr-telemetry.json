@@ -2097,6 +2097,483 @@
           "rawQuery": true
         }
       ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 115
+      },
+      "id": 120,
+      "title": "Custom SINR Analytics \u2014 Variance & Sliding Window",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "srsran_influxdb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisLabel": "dB",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "pointSize": 3,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "unit": "dB"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "mac_crc_stats_custom.avg_sinr"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Window Mean SINR"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "mac_crc_stats_custom.sinr_sliding_avg"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Sliding Avg (last 16)"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#FF9830",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 3
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "mac_crc_stats_custom.min_sinr"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Min SINR"
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "dash": [
+                    5,
+                    5
+                  ],
+                  "fill": "dash"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "mac_crc_stats_custom.max_sinr"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Max SINR"
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "dash": [
+                    5,
+                    5
+                  ],
+                  "fill": "dash"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 116
+      },
+      "id": 121,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        }
+      },
+      "title": "SINR: Window Mean vs Sliding Average",
+      "type": "timeseries",
+      "targets": [
+        {
+          "query": "SELECT mean(\"avg_sinr\") AS \"avg_sinr\", mean(\"sinr_sliding_avg\") AS \"sinr_sliding_avg\", mean(\"min_sinr\") AS \"min_sinr\", mean(\"max_sinr\") AS \"max_sinr\" FROM \"mac_crc_stats_custom\" WHERE $timeFilter GROUP BY time($__interval) fill(none)",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "srsran_influxdb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisLabel": "dB\u00b2",
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "opacity",
+            "lineWidth": 2,
+            "pointSize": 3,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "area"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 5
+              },
+              {
+                "color": "red",
+                "value": 20
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "mac_crc_stats_custom.sinr_variance"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "SINR Variance"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#8F3BB8",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 116
+      },
+      "id": 122,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        }
+      },
+      "title": "SINR Variance (dB\u00b2)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "query": "SELECT mean(\"sinr_variance\") AS \"sinr_variance\" FROM \"mac_crc_stats_custom\" WHERE $timeFilter GROUP BY time($__interval) fill(none)",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "srsran_influxdb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisLabel": "",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "pointSize": 3,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "unit": "percent"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "mac_crc_stats_custom.tx_success_rate"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "TX Success Rate"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#73BF69",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "mac_crc_stats_custom.sinr_sliding_cnt"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Sliding Window Samples"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "samples"
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#5794F2",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.axisSoftMax",
+                "value": 20
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 124
+      },
+      "id": 123,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        }
+      },
+      "title": "TX Success Rate & Sliding Window Fill",
+      "type": "timeseries",
+      "targets": [
+        {
+          "query": "SELECT mean(\"tx_success_rate\") AS \"tx_success_rate\", mean(\"sinr_sliding_cnt\") AS \"sinr_sliding_cnt\" FROM \"mac_crc_stats_custom\" WHERE $timeFilter GROUP BY time($__interval) fill(none)",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "srsran_influxdb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 5
+              },
+              {
+                "color": "red",
+                "value": 20
+              }
+            ]
+          },
+          "min": 0,
+          "max": 50,
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 12,
+        "y": 124
+      },
+      "id": 124,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "orientation": "auto"
+      },
+      "title": "Current SINR Variance",
+      "type": "gauge",
+      "targets": [
+        {
+          "query": "SELECT last(\"sinr_variance\") FROM \"mac_crc_stats_custom\" WHERE $timeFilter",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "srsran_influxdb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 10
+              },
+              {
+                "color": "green",
+                "value": 20
+              }
+            ]
+          },
+          "unit": "dB"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 124
+      },
+      "id": 125,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "title": "Current Sliding Avg SINR",
+      "type": "stat",
+      "targets": [
+        {
+          "query": "SELECT last(\"sinr_sliding_avg\") FROM \"mac_crc_stats_custom\" WHERE $timeFilter",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series"
+        }
+      ]
     }
   ],
   "refresh": "5s",
