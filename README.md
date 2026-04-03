@@ -98,6 +98,7 @@ project_extension/  Stress anomaly extension -- docs, figures, analysis scripts
 - [**Anomaly Dataset Collection**](docs/ANOMALY_DATASET.md) -- Both dataset types: stress anomalies (23 scenarios) and realistic channel scenarios (10 scenarios), per-scenario results, key findings, reproduction steps, dataset structure, and data quirks
 - [**Anomaly Collection Progress Report**](docs/ANOMALY_COLLECTION_REPORT.md) -- Full progress report with plots: channel scenario comparison, stress hook latency analysis, signal-space scatter, and hook latency orthogonality demonstration
 - [**Janus vs Standard Logs**](docs/comparison/JANUS_VS_STANDARD_LOGS.md) -- Side-by-side comparison of Janus and standard srsRAN metrics: overlapping metric validation, correlation analysis, 13 plots, CPU overhead, and capability matrix
+- [**Custom SINR Codelet**](docs/custom-codelet/CUSTOM_SINR_CODELET.md) -- Custom jBPF codelet with online variance and sliding window average: BPF constraints, build guide, Grafana panels, live verification results
 
 
 
