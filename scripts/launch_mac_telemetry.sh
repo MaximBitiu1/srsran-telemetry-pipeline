@@ -392,6 +392,7 @@ CODELET_SETS=(
   "ue_contexts/ue_contexts.yaml"                # UE contexts: DU/CU-CP/E1AP lifecycle (9 codelets)
   "ngap/ngap.yaml"                              # NGAP: procedure start/complete/reset (3 codelets)
   "perf/jbpf_stats.yaml"                        # jbpf perf: internal stats (1 codelet)
+  "mac/mac_stats_custom.yaml"                   # Custom SINR: variance + sliding window (2 codelets)
 )
 
 LOADED=0
