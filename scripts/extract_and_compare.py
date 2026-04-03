@@ -483,9 +483,9 @@ def make_plots(aligned, jbpf, standard):
             if r.get("hook"):
                 hooks.add(r["hook"])
         for hook in sorted(hooks):
-            pts = [(t, float(r.get("p50_ns", 0))/1000)
+            pts = [(t, float(r.get("p50", 0))/1000)
                    for t, r in zip(times, perf)
-                   if r.get("hook") == hook and r.get("p50_ns")]
+                   if r.get("hook") == hook and r.get("p50")]
             if pts:
                 ax.plot([p[0] for p in pts], [p[1] for p in pts],
                         "o-", markersize=2, linewidth=1, label=hook, alpha=0.7)
