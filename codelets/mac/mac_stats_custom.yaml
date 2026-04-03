@@ -1,0 +1,34 @@
+# Custom SINR codelet set — variance + sliding window average
+# Deploy alongside or instead of mac_stats for extended SINR analytics
+
+codeletset_id: mac_stats_custom
+
+codelet_descriptor:
+
+  - codelet_name: mac_stats_collect_custom
+    codelet_path: ${JBPF_CODELETS}/mac/mac_stats_collect_custom.o
+    hook_name: report_stats
+    priority: 1
+    out_io_channel:
+      - name: output_map_crc_custom
+        forward_destination: DestinationUDP
+        serde:
+          file_path: ${JBPF_CODELETS}/mac/mac_sched_crc_stats_custom:crc_stats_custom_serializer.so
+          protobuf:
+            package_path: ${JBPF_CODELETS}/mac/mac_sched_crc_stats_custom.pb
+            msg_name: crc_stats_custom
+
+  - codelet_name: mac_sched_crc_stats_custom
+    codelet_path: ${JBPF_CODELETS}/mac/mac_sched_crc_stats_custom.o
+    hook_name: mac_sched_crc_indication
+    priority: 1
+    linked_maps:
+      - map_name: stats_map_crc_custom
+        linked_codelet_name: mac_stats_collect_custom
+        linked_map_name: stats_map_crc_custom
+      - map_name: crc_custom_hash
+        linked_codelet_name: mac_stats_collect_custom
+        linked_map_name: crc_custom_hash
+      - map_name: crc_custom_not_empty
+        linked_codelet_name: mac_stats_collect_custom
+        linked_map_name: crc_custom_not_empty

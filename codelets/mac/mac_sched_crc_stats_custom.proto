@@ -1,0 +1,28 @@
+// Custom codelet proto — extends crc_stats with variance and sliding window average
+// Based on mac_sched_crc_stats.proto
+
+syntax = "proto2";
+
+
+message t_crc_stats_custom {
+   required uint32 du_ue_index = 1;
+   required uint32 succ_tx = 2;
+   required uint32 cnt_tx = 3;
+   // SINR basic stats (same as original)
+   required int32 min_sinr = 4;
+   required int32 max_sinr = 5;
+   required int32 sum_sinr = 6;
+   required uint32 cnt_sinr = 7;
+   // NEW: sum of squared SINR for variance computation
+   required int32 sum_sq_sinr = 8;
+   // NEW: computed integer variance = E[X^2] - E[X]^2
+   required int32 sinr_variance = 9;
+   // NEW: sliding window average of last 16 SINR samples
+   required int32 sinr_sliding_avg = 10;
+   required uint32 sinr_sliding_cnt = 11;
+}
+
+message crc_stats_custom {
+   required uint64 timestamp = 1;
+   repeated t_crc_stats_custom stats = 2;
+}
