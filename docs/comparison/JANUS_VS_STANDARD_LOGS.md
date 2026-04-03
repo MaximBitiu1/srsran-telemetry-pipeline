@@ -21,7 +21,7 @@ To check whether both channels agree where they overlap — and to document what
 | Channel | GRC broker, Rician fading, K=3 dB, SNR=25 dB, Doppler 5 Hz |
 | Bandwidth | 10 MHz (52 PRBs), 15 kHz SCS |
 | Traffic | iperf3: 10 Mbps UDP UL + 5 Mbps UDP DL (reverse mode) + continuous ping |
-| Duration | ~5 minutes steady-state |
+| Duration | ~57 minutes steady-state |
 | Janus | 11 codelet sets → InfluxDB 1.x on port 8086 |
 | Standard | Telegraf scraping WebSocket :8001 → InfluxDB 3 on port 8081 |
 
@@ -60,10 +60,10 @@ We identified 10 metrics reported by both systems. The table maps each to its so
 
 | Metric | Janus Source | Standard Source | Correlation |
 |---|---|---|---|
-| SINR / SNR | `mac_crc_stats.avg_sinr` | `ue.pusch_snr_db` | r = 0.885 |
+| SINR / SNR | `mac_crc_stats.avg_sinr` | `ue.pusch_snr_db` | r = 0.470 |
 | CQI | `mac_uci_stats.avg_cqi` | `ue.cqi` | constant (both 15) |
-| DL MCS | `fapi_dl_config.avg_mcs` | `ue.dl_mcs` | r = 0.998 |
-| UL MCS | `fapi_ul_config.avg_mcs` | `ue.ul_mcs` | r ≈ 1.0 |
+| DL MCS | `fapi_dl_config.avg_mcs` | `ue.dl_mcs` | near-constant (both ≈28) |
+| UL MCS | `fapi_ul_config.avg_mcs` | `ue.ul_mcs` | constant (both 28) |
 | DL Throughput | `ue_dl_throughput.bitrate_mbps` | `ue.dl_brate` | -0.014* |
 | UL Throughput | `ue_ul_throughput.bitrate_mbps` | `ue.ul_brate` | -0.023* |
 | BLER | `mac_crc_stats.tx_success_rate` | `ue.dl_nof_ok/nok` | both 0% |
@@ -81,19 +81,19 @@ We identified 10 metrics reported by both systems. The table maps each to its so
 
 This is the key result. Where both systems measure the same thing, they match.
 
-**SINR/SNR (r = 0.885):**
+**SINR/SNR (r = 0.470):**
 
 ![SINR/SNR Comparison](figures/01_sinr_snr_comparison.png)
 
-Both traces follow the same fading-induced fluctuations. Janus averages 25.21 dB, standard 25.56 dB — 1.4% difference from their different averaging windows (Janus aggregates over a 2-second codelet interval, standard reports ~1 s averages).
+Both traces follow the same fading-induced fluctuations. Janus averages 25.17 dB, standard 25.55 dB — 1.5% difference from their different averaging windows (Janus aggregates over a 2-second codelet interval, standard reports ~1 s averages). The moderate correlation (r = 0.470) reflects the narrow SINR range (~2 dB spread) at this high SNR — both systems agree on the mean but their per-second noise is largely independent.
 
-**DL MCS (r = 0.998):**
+**DL MCS:**
 
 ![DL MCS Comparison](figures/03_dl_mcs_comparison.png)
 
-Almost indistinguishable. Both report MCS 27–28 in steady state with identical drops during fading dips. Mean difference 1.0%.
+Both saturated near the maximum. Standard reports a constant MCS 28, while Janus reports the per-slot weighted average (~27.70), capturing sub-integer variation invisible to the standard 1 s poll. Mean difference 1.1%.
 
-**UL MCS (r ≈ 1.0):**
+**UL MCS:**
 
 ![UL MCS Comparison](figures/04_ul_mcs_comparison.png)
 
@@ -113,8 +113,8 @@ Both saturated at this SNR — CQI stays at 15, BLER is 0%. These would diverge 
 
 | Direction | Janus (iperf3) | Standard (MAC) | Ratio |
 |---|---|---|---|
-| DL | 5.00 Mbps | 9.90 Mbps | 1.98× |
-| UL | 10.00 Mbps | 20.40 Mbps | 2.04× |
+| DL | 5.00 Mbps | 9.79 Mbps | 1.96× |
+| UL | 10.00 Mbps | 19.45 Mbps | 1.95× |
 
 Janus reports what iperf3 delivers at the application layer. Standard reports MAC-layer bitrate including RLC headers, PDCP headers, GTP-U encapsulation, retransmissions, and control signalling. The ~2× ratio is consistent with what you'd expect from a 10 MHz NR cell carrying UDP traffic.
 
@@ -131,8 +131,8 @@ Timing advance has a constant offset: Janus reports the raw UCI TA value (~1024)
 
 ![Correlation Scatter Plots](figures/13_correlation_scatter.png)
 
-- SINR: strong linear correlation (r = 0.885), points cluster around the 1:1 line with a small offset
-- DL MCS: near-perfect (r = 0.998), tight cluster along the diagonal
+- SINR: moderate correlation (r = 0.470) — both systems agree on the mean (~25 dB) but per-second fluctuations are largely independent due to the narrow fading range at this SNR
+- CQI and MCS: constant at this SNR (both saturated), so correlation is undefined
 - Throughput: no correlation because they measure different protocol layers
 
 ### 4.5 Summary
@@ -141,12 +141,12 @@ Timing advance has a constant offset: Janus reports the raw UCI TA value (~1024)
 
 | Metric | Janus Mean | Standard Mean | Difference | Correlation |
 |---|---|---|---|---|
-| SINR/SNR (dB) | 25.21 | 25.56 | 1.4% | 0.885 |
+| SINR/SNR (dB) | 25.17 | 25.55 | 1.5% | 0.470 |
 | CQI | 15.00 | 15.00 | 0.0% | — |
-| DL MCS | 27.62 | 27.91 | 1.0% | 0.998 |
-| UL MCS | 27.99 | 28.00 | 0.0% | ~1.0 |
-| DL Throughput (Mbps) | 5.00 | 9.90 | 49.4%* | — |
-| UL Throughput (Mbps) | 10.00 | 20.40 | 51.0%* | — |
+| DL MCS | 27.70 | 28.00 | 1.1% | — |
+| UL MCS | 28.00 | 28.00 | 0.0% | — |
+| DL Throughput (Mbps) | 5.00 | 9.79 | 48.9%* | — |
+| UL Throughput (Mbps) | 10.00 | 19.45 | 48.6%* | — |
 | BLER (%) | 0.00 | 0.00 | 0.0% | — |
 
 \* Expected — different measurement layers.

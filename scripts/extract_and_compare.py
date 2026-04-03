@@ -12,6 +12,7 @@ import json
 import csv
 import os
 import sys
+import argparse
 import urllib.request
 import urllib.parse
 from datetime import datetime, timezone
@@ -32,11 +33,53 @@ JBPF_DB  = "srsran_telemetry"
 STD_URL  = "http://localhost:8081"
 STD_DB   = "srsran"
 
+# Time window (set by CLI args, None = no filter)
+TIME_START = None   # ISO string e.g. '2026-04-03T10:36:00Z'
+TIME_END   = None   # ISO string
+
 
 # ────────────────────────────── helpers ──────────────────────────────
 
+def _time_clause_influx1():
+    """Build InfluxQL WHERE clauses for the time window."""
+    parts = []
+    if TIME_START:
+        parts.append(f"time >= '{TIME_START}'")
+    if TIME_END:
+        parts.append(f"time <= '{TIME_END}'")
+    return (" AND ".join(parts)) if parts else ""
+
+
+def _time_clause_sql():
+    """Build SQL WHERE clauses for InfluxDB 3."""
+    parts = []
+    if TIME_START:
+        parts.append(f"time >= '{TIME_START}'")
+    if TIME_END:
+        parts.append(f"time <= '{TIME_END}'")
+    return (" AND ".join(parts)) if parts else ""
+
+
+def _inject_where(q, clause):
+    """Inject a WHERE/AND clause into a query that may already have WHERE."""
+    if not clause:
+        return q
+    q_upper = q.upper()
+    if "WHERE" in q_upper:
+        # Insert after existing WHERE
+        idx = q_upper.index("WHERE") + len("WHERE")
+        return q[:idx] + " " + clause + " AND" + q[idx:]
+    # Insert before ORDER BY / GROUP BY / LIMIT
+    for kw in ("ORDER BY", "GROUP BY", "LIMIT"):
+        if kw in q_upper:
+            idx = q_upper.index(kw)
+            return q[:idx] + "WHERE " + clause + " " + q[idx:]
+    return q + " WHERE " + clause
+
+
 def query_influx1(q: str):
     """Query InfluxDB 1.x and return list of dicts."""
+    q = _inject_where(q, _time_clause_influx1())
     url = f"{JBPF_URL}/query?db={JBPF_DB}&q={urllib.parse.quote(q)}"
     with urllib.request.urlopen(url, timeout=10) as r:
         data = json.loads(r.read())
@@ -51,6 +94,7 @@ def query_influx1(q: str):
 
 def query_influx3(q: str):
     """Query InfluxDB 3 (SQL) and return list of dicts."""
+    q = _inject_where(q, _time_clause_sql())
     payload = json.dumps({"db": STD_DB, "q": q}).encode()
     req = urllib.request.Request(
         f"{STD_URL}/api/v3/query_sql",
@@ -654,8 +698,35 @@ def print_statistics(stats):
 # ───────────────────────────── main ─────────────────────────────────
 
 def main():
+    global TIME_START, TIME_END
+
+    parser = argparse.ArgumentParser(description="jBPF vs Standard telemetry comparison")
+    parser.add_argument("--start", help="Start time (ISO, e.g. 2026-04-03T10:36:00Z)")
+    parser.add_argument("--end",   help="End time (ISO, e.g. 2026-04-03T11:33:00Z)")
+    parser.add_argument("--trim-startup", type=int, default=30,
+                        help="Seconds to trim from session start (default: 30)")
+    args = parser.parse_args()
+
+    TIME_START = args.start
+    TIME_END = args.end
+
+    if TIME_START or TIME_END:
+        print(f"  Time window: {TIME_START or '...'} → {TIME_END or '...'}")
+
     jbpf = extract_jbpf()
     standard = extract_standard()
+
+    # Auto-trim startup transients if no explicit start was given
+    if not TIME_START and args.trim_startup > 0 and standard:
+        first_t = to_epoch(standard[0]["time"])
+        cutoff = first_t + args.trim_startup
+        standard = [r for r in standard if to_epoch(r["time"]) >= cutoff]
+        for key in list(jbpf.keys()):
+            rows = jbpf[key]
+            if rows and "time" in rows[0]:
+                jbpf[key] = [r for r in rows if to_epoch(r["time"]) >= cutoff]
+        print(f"  Trimmed first {args.trim_startup}s of startup transient")
+
     aligned = build_aligned_series(jbpf, standard)
     stats = compute_statistics(aligned)
     print_statistics(stats)
