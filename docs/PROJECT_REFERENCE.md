@@ -19,31 +19,9 @@ For channel broker and channel model details, see
 
 ## 2. System Architecture
 
-```
-jrtc (runtime controller)
-  |
-  +-- gNB (srsRAN Project, jBPF fork)
-  |     TX :4000  RX :4001
-  |         |
-  |    ZMQ Channel Broker
-  |    (C or GRC Python -- fading, AWGN, interference)
-  |         |
-  |     srsUE (NR-only, net namespace ue1)
-  |       TX :2001  RX :2000
-  |       TUN: tun_srsue (10.45.0.1/24)
-  |         |
-  |         +-- iperf3 UL :5201  (10 Mbps UDP, UE -> core)
-  |         +-- iperf3 DL :5202  (5 Mbps UDP, core -> UE, --reverse)
-  |         +-- ICMP ping -> /tmp/ping_ue.log
-  |
-  +-- ~60 eBPF codelets (11 sets) -> 17 telemetry schemas
-  |
-  +-- Reverse Proxy :30450 (IPC-to-TCP)
-  |
-  +-- Decoder (gRPC :20789, UDP :20788)
-        -> /tmp/decoder.log
-        -> telemetry_to_influxdb.py -> InfluxDB :8086 -> Grafana :3000
-```
+![System Architecture](figures/fig_system_architecture.png)
+
+*Figure: Full pipeline — jrtc → gNB → ZMQ Channel Broker → srsUE → eBPF codelets → Decoder → InfluxDB → Grafana. See also the [telemetry data flow diagram](figures/fig_telemetry_flow.png) and [channel broker internals](figures/fig_channel_broker.png).*
 
 ### Startup Order
 

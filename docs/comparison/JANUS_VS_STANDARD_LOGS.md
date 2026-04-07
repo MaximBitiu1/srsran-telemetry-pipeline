@@ -18,41 +18,19 @@ Even when both channels measure the "same" metric, architectural differences mea
 
 ### 2.1 Where each system taps into the stack
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Application Layer                        │
-│  iperf3 UDP (5 Mbps DL / 10 Mbps UL)                          │
-│  ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ │
-│  Janus: ue_dl/ul_throughput ← measures HERE (iperf3 output)    │
-├─────────────────────────────────────────────────────────────────┤
-│                          GTP-U / NGAP                           │
-│  Janus: ngap_events ← procedure timing                         │
-├─────────────────────────────────────────────────────────────────┤
-│                            PDCP                                 │
-│  Janus: pdcp_dl/ul_stats ← per-bearer byte counters            │
-├─────────────────────────────────────────────────────────────────┤
-│                             RLC                                 │
-│  Janus: rlc_dl/ul_stats ← SDU latency, retransmission bytes    │
-├─────────────────────────────────────────────────────────────────┤
-│                         MAC Scheduler                           │
-│  Janus: mac_crc_stats ← per-CRC SINR/RSRP                     │
-│  Janus: mac_harq_stats ← per-HARQ MCS/TBS                     │
-│  Janus: mac_bsr_stats ← cumulative buffer bytes per window     │
-│  Janus: mac_uci_stats ← CQI, TA (per-UCI report)              │
-│  ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ │
-│  Standard: ue.dl/ul_brate ← measures HERE (MAC bitrate)        │
-│  Standard: ue.pusch_snr_db, ue.dl/ul_mcs, ue.cqi, ue.bsr      │
-├─────────────────────────────────────────────────────────────────┤
-│                        FAPI (PHY↔MAC)                           │
-│  Janus: fapi_dl/ul_config ← per-slot MCS, PRB, TBS             │
-│  Janus: fapi_crc_stats ← PHY-layer CRC pass/fail               │
-├─────────────────────────────────────────────────────────────────┤
-│                          PHY Layer                               │
-│  Raw IQ samples over ZMQ                                        │
-└─────────────────────────────────────────────────────────────────┘
-```
+| Layer | Janus (jBPF) hooks | Standard metrics |
+|-------|-------------------|-----------------|
+| Application | `ue_dl/ul_throughput` (iperf3 output) | — |
+| GTP-U / NGAP | `ngap_events` (procedure timing) | — |
+| PDCP | `pdcp_dl/ul_stats` (per-bearer bytes) | — |
+| RLC | `rlc_dl/ul_stats` (SDU latency, retx) | — |
+| MAC Scheduler | `mac_crc_stats`, `mac_harq_stats`, `mac_bsr_stats`, `mac_uci_stats` | `ue.pusch_snr_db`, `ue.dl/ul_mcs`, `ue.cqi`, `ue.bsr` |
+| FAPI (PHY↔MAC) | `fapi_dl/ul_config`, `fapi_crc_stats` | — |
+| PHY | Raw IQ (ZMQ) | — |
 
-The key insight: **Standard metrics tap the MAC layer.** Janus hooks into multiple layers — MAC, FAPI, RLC, PDCP, and application. When both measure "throughput", they are measuring at different points in the stack, so the numbers differ by the overhead of all the headers and encapsulation between those points.
+![Capability comparison](../figures/fig_jbpf_vs_standard.png)
+
+The key insight: **Standard metrics tap only the MAC layer.** Janus hooks into multiple layers — MAC, FAPI, RLC, PDCP, and application. When both measure "throughput", they measure at different points in the stack, so numbers differ by the header overhead between those layers.
 
 ### 2.2 Aggregation window differences
 
@@ -328,6 +306,10 @@ These are mostly useful for radio resource management and scheduler debugging. T
 ---
 
 ## 8. Capability comparison
+
+![CPU overhead diagram](../figures/fig_cpu_overhead.png)
+
+*Figure: Per-hook CPU overhead measured directly from jbpf_out_perf_list telemetry. Total steady-state overhead is ~3.3% of one CPU core at 25 Mbps load.*
 
 | | Standard | Janus |
 |---|---|---|
