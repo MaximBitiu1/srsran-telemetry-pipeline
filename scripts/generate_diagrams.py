@@ -495,6 +495,136 @@ def fig_cpu_overhead():
     print(f"Saved {path}")
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# Figure 7 — Protocol Stack Throughput (replaces ASCII in comparison doc)
+# ══════════════════════════════════════════════════════════════════════════════
+def fig_throughput_stack():
+    fig, ax = plt.subplots(figsize=(10, 7))
+    fig.patch.set_facecolor(C["bg"])
+    ax.set_facecolor(C["bg"])
+    ax.set_xlim(0, 10)
+    ax.set_ylim(0, 7)
+    ax.axis("off")
+    ax.set_title("Protocol Stack Overhead — Why Standard and Janus Throughput Differ",
+                 fontsize=11, fontweight="bold", color=C["text"], pad=10)
+
+    layers = [
+        # (y_center, label, left_annotation, right_annotation, color)
+        (6.1, "Application (iperf3)", "10.00 Mbps payload",     "← Janus measures here\n(iperf3 output)",   "#2e8b57"),
+        (5.0, "IP + UDP",            "+28 bytes/packet",         "IP header (20) + UDP (8)",                  "#1a6faf"),
+        (3.9, "GTP-U",               "+16 bytes/packet",         "GTP-U header + TEID",                       "#1a6faf"),
+        (2.8, "PDCP",                "+3 bytes/PDU",             "PDCP header + integrity",                   "#6a0dad"),
+        (1.7, "RLC",                 "+2 bytes/PDU",             "RLC AM header + segmentation",              "#6a0dad"),
+        (0.6, "MAC Scheduler",       "19.45 Mbps total",         "← Standard measures here\n(MAC brate)",    "#b22222"),
+    ]
+
+    for y, label, left_ann, right_ann, color in layers:
+        box(ax, 5.0, y, 4.0, 0.72, label, color=color, fontsize=9)
+        ax.text(2.7, y, left_ann, ha="right", va="center", fontsize=8,
+                color="#444444", bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="#cccccc", alpha=0.8))
+        ax.text(7.3, y, right_ann, ha="left", va="center", fontsize=7.5,
+                color="#555555", style="italic")
+
+    # Arrows between layers
+    for i in range(len(layers) - 1):
+        y1 = layers[i][0] - 0.36
+        y2 = layers[i+1][0] + 0.36
+        ax.annotate("", xy=(5.0, y2), xytext=(5.0, y1),
+                    arrowprops=dict(arrowstyle="->", color="#888888", lw=1.5), zorder=2)
+
+    # Ratio callout
+    ax.text(1.5, 3.35, "~1.95×\nratio", ha="center", va="center", fontsize=11,
+            fontweight="bold", color="#b22222",
+            bbox=dict(boxstyle="round,pad=0.4", fc="#fff0f0", ec="#b22222", alpha=0.9))
+    ax.annotate("", xy=(1.5, 0.95), xytext=(1.5, 2.9),
+                arrowprops=dict(arrowstyle="<->", color="#b22222", lw=1.5), zorder=2)
+    ax.annotate("", xy=(1.5, 5.75), xytext=(1.5, 3.8),
+                arrowprops=dict(arrowstyle="<->", color="#b22222", lw=1.5), zorder=2)
+
+    plt.tight_layout()
+    path = os.path.join(OUT, "fig_throughput_stack.png")
+    plt.savefig(path, dpi=150, bbox_inches="tight", facecolor=C["bg"])
+    plt.close()
+    print(f"Saved {path}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Figure 8 — Custom SINR Codelet Architecture
+# ══════════════════════════════════════════════════════════════════════════════
+def fig_custom_codelet():
+    fig, ax = plt.subplots(figsize=(12, 7))
+    fig.patch.set_facecolor(C["bg"])
+    ax.set_facecolor(C["bg"])
+    ax.set_xlim(0, 12)
+    ax.set_ylim(0, 7)
+    ax.axis("off")
+    ax.set_title("Custom SINR Codelet — In-Network Analytics Architecture",
+                 fontsize=11, fontweight="bold", color=C["text"], pad=10)
+
+    # gNB outer box
+    gnb_bg = FancyBboxPatch((0.3, 1.2), 8.4, 5.4,
+                             boxstyle="round,pad=0.1",
+                             facecolor="#eef2ff", edgecolor=C["gnb"],
+                             linewidth=2, alpha=0.9, zorder=1)
+    ax.add_patch(gnb_bg)
+    ax.text(4.5, 6.45, "srsRAN gNB  —  mac_sched_crc_indication hook",
+            ha="center", va="center", fontsize=9, fontweight="bold", color=C["gnb"], zorder=2)
+
+    # Hook codelet box
+    box(ax, 4.5, 4.5, 7.6, 1.6,
+        "mac_sched_crc_stats_custom.o  (hook codelet, fires on every UL CRC PDU)",
+        color=C["jrtc"], fontsize=8.5)
+
+    # Processing steps inside hook codelet (listed as text)
+    steps = [
+        "1. Extract SINR from ul_crc_pdu_indication",
+        "2. Update min / max / sum / count  (basic stats)",
+        "3. Accumulate sum_sq_sinr  (for variance: E[X²] − E[X]²)",
+        "4. Update ring buffer[16]  (sliding window average)",
+        "5. Compute variance and sliding_avg inline",
+    ]
+    for i, step in enumerate(steps):
+        ax.text(1.0, 4.95 - i * 0.28, f"  {step}", ha="left", va="center",
+                fontsize=7.2, color="white", zorder=4)
+
+    # Maps
+    box(ax, 3.0, 2.8, 3.0, 0.75, "stats_map_crc_custom",
+        "Cleared each ~1 s window", color=C["data"], fontsize=8)
+    box(ax, 6.6, 2.8, 3.0, 0.75, "sinr_window_map",
+        "Ring buffer — persists always", color=C["gnb"], fontsize=8)
+
+    ax.text(4.5, 3.55, "linked_maps (shared memory between codelets)",
+            ha="center", va="center", fontsize=7.5, color="#555555", style="italic")
+
+    # Collector codelet
+    box(ax, 4.5, 1.75, 7.6, 0.75,
+        "mac_stats_collect_custom.o  (collector codelet, runs on report_stats ~1 s tick)",
+        color=C["data"], fontsize=8.5)
+    ax.text(4.5, 1.55, "Reads stats_map → sets timestamp → sends via ringbuf → Protobuf serialiser → UDP",
+            ha="center", va="center", fontsize=7.2, color="#333333")
+
+    # Arrows inside gNB
+    arrow(ax, 4.5, 3.72, 4.5, 3.38, color="#666666")
+    arrow(ax, 3.0, 3.18, 3.0, 2.12, color=C["data"])
+    arrow(ax, 6.6, 3.18, 6.6, 2.12, color=C["gnb"])
+    arrow(ax, 4.5, 1.38, 4.5, 1.1, color=C["data"])
+
+    # Output side
+    box(ax, 10.5, 4.2, 1.6, 0.7, "InfluxDB\n:8086", color=C["infra"], fontsize=8.5)
+    box(ax, 10.5, 2.8, 1.6, 0.7, "Grafana\n:3000", color=C["grafana"], fontsize=8.5)
+    ax.text(10.5, 1.4, "New panels:\n• SINR variance\n• Sliding avg (N=16)",
+            ha="center", va="center", fontsize=7.5, color=C["text"])
+    arrow(ax, 8.7, 1.75, 9.7, 4.2, color=C["data"], label="UDP\nProtobuf", label_offset=(0.1, 0))
+    arrow(ax, 10.5, 3.85, 10.5, 3.15, color=C["data"])
+    arrow(ax, 10.5, 2.45, 10.5, 1.85, color=C["grafana"])
+
+    plt.tight_layout()
+    path = os.path.join(OUT, "fig_custom_codelet.png")
+    plt.savefig(path, dpi=150, bbox_inches="tight", facecolor=C["bg"])
+    plt.close()
+    print(f"Saved {path}")
+
+
 if __name__ == "__main__":
     print("Generating architecture diagrams...")
     fig_system_architecture()
@@ -503,4 +633,6 @@ if __name__ == "__main__":
     fig_jbpf_vs_standard()
     fig_dataset_overview()
     fig_cpu_overhead()
+    fig_throughput_stack()
+    fig_custom_codelet()
     print("All diagrams generated in docs/figures/")

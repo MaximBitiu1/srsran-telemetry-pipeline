@@ -19,42 +19,7 @@ hook overhead**.
 
 ## Architecture
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│  srsRAN gNB  (mac_sched_crc_indication hook)                    │
-│                                                                  │
-│  ┌──────────────────────────────────────────────────────────┐    │
-│  │  mac_sched_crc_stats_custom.o  (hook codelet)            │    │
-│  │                                                          │    │
-│  │  On each UL CRC PDU:                                     │    │
-│  │   1. Extract SINR from ul_crc_pdu_indication             │    │
-│  │   2. Update min / max / sum / count   (basic stats)      │    │
-│  │   3. Accumulate sum_sq_sinr           (for variance)     │    │
-│  │   4. Update ring buffer[16]           (sliding window)   │    │
-│  │   5. Compute variance = E[X²] − E[X]²                   │    │
-│  │   6. Compute sliding_avg = window_sum / window_count     │    │
-│  │                                                          │    │
-│  │        ┌────────────────────┐  ┌─────────────────────┐   │    │
-│  │        │ stats_map_crc_custom│  │  sinr_window_map    │   │    │
-│  │        │ (cleared each ~1s) │  │  (persists always)  │   │    │
-│  │        └────────┬───────────┘  └─────────────────────┘   │    │
-│  └─────────────────┼────────────────────────────────────────┘    │
-│                    │ shared via linked_maps                       │
-│  ┌─────────────────▼────────────────────────────────────────┐    │
-│  │  mac_stats_collect_custom.o  (collector codelet)          │    │
-│  │                                                          │    │
-│  │  Runs on report_stats hook (~1 s tick):                   │    │
-│  │   • Reads stats_map_crc_custom                            │    │
-│  │   • Sets timestamp                                        │    │
-│  │   • Sends via ringbuf → protobuf serializer → UDP         │    │
-│  │   • Clears stats_map (but NOT sinr_window_map)            │    │
-│  └──────────────────────────────────────────────────────────┘    │
-│                    │                                             │
-└────────────────────┼─────────────────────────────────────────────┘
-                     │ UDP / protobuf
-                     ▼
-            InfluxDB / Grafana
-```
+![Custom SINR Codelet Architecture](../figures/fig_custom_codelet.png)
 
 ---
 
@@ -128,14 +93,11 @@ A 16-entry ring buffer stores the most recent SINR samples.  The window
 persists across reporting windows (its BPF map is never cleared by the
 collector).
 
-```
-┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
-│ 0 │ 1 │ 2 │ 3 │ 4 │ 5 │ 6 │ 7 │ 8 │ 9 │10 │11 │12 │13 │14 │15 │
-└───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
-      ▲ write_idx (wraps around)
+| Index | `0` | `1` | `2` | `3` | `4` | `5` | `...` | `14` | `15` |
+|-------|-----|-----|-----|-----|-----|-----|-------|------|------|
+| Value | SINR₀ | SINR₁ | SINR₂ | ... | ... | ... | ... | SINR₁₄ | SINR₁₅ |
 
-window_sum tracks the running sum — no loop needed for average.
-```
+`write_idx` wraps around modulo 16. `window_sum` tracks the running sum — no loop needed for average.
 
 On each new SINR sample:
 1. If window full (count ≥ 16): subtract oldest sample from `window_sum`

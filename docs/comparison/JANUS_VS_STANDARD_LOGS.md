@@ -53,38 +53,7 @@ This explains every systematic difference:
 
 ### 2.3 Throughput: the 2× gap explained
 
-```
- iperf3 sends 10 Mbps UDP
-         │
-         ▼
- ┌──── Application ────┐
- │  10.00 Mbps payload  │  ← Janus measures here (iperf3 output)
- └──────────┬───────────┘
-            ▼
- ┌──── IP + UDP ────────┐
- │  +28 bytes/packet     │  IP header (20) + UDP header (8)
- └──────────┬───────────┘
-            ▼
- ┌──── GTP-U ───────────┐
- │  +16 bytes/packet     │  GTP-U header + TEID
- └──────────┬───────────┘
-            ▼
- ┌──── PDCP ────────────┐
- │  +3 bytes/PDU         │  PDCP header + integrity/ciphering
- └──────────┬───────────┘
-            ▼
- ┌──── RLC ─────────────┐
- │  +2 bytes/PDU         │  RLC AM header + segmentation
- └──────────┬───────────┘
-            ▼
- ┌──── MAC ─────────────┐
- │  +3 bytes/PDU +       │  MAC header + BSR/PHR/TA MAC CEs
- │  control signalling   │  + scheduling grant overhead
- │  + HARQ retx bytes    │  + retransmitted transport blocks
- │                       │
- │  19.45 Mbps total     │  ← Standard measures here (MAC brate)
- └───────────────────────┘
-```
+![Protocol stack throughput diagram](../figures/fig_throughput_stack.png)
 
 The ~2× ratio (10 Mbps → 19.45 Mbps) comes from:
 - **Protocol headers:** Each layer adds bytes. For a typical 1400-byte UDP payload, the cumulative overhead is ~52 bytes/packet (~3.7%).
@@ -113,28 +82,9 @@ Both databases were cleared before starting.
 
 ### Data flow
 
-```
-                    ┌─────────────────────────────────────────────┐
-                    │              gNB (srsRAN + Janus)           │
-                    │                                             │
-                    │   ┌─── MAC/FAPI/RLC hooks ──► IPC ───────┐ │
-                    │   │                                       │ │
-                    │   │   WebSocket :8001 ──► Telegraf ──┐    │ │
-                    │   │                                  │    │ │
-                    └───┼──────────────────────────────────┼────┼─┘
-                        │                                  │    │
-                        ▼                                  ▼    ▼
-                   Reverse Proxy                     InfluxDB 3  Decoder
-                   :30450                            :8081       :20789
-                        │                                  │        │
-                        │                                  ▼        ▼
-                        │                             Grafana   InfluxDB 1.x
-                        │                             :3300     :8086
-                        │                                           │
-                        │                                           ▼
-                        └───────────────────────────────────► Grafana :3000
-                                                         (Janus dashboard)
-```
+![System architecture — dual telemetry channels](../figures/fig_system_architecture.png)
+
+*Two independent telemetry channels share the same gNB: Janus hooks (jBPF) route through the Reverse Proxy → Decoder → InfluxDB 1.x → Grafana :3000, while the standard WebSocket metrics server (:8001) feeds into InfluxDB 3 / Grafana :3300.*
 
 ---
 

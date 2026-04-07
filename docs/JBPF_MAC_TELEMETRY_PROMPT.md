@@ -93,43 +93,9 @@ After fixes, all 5 data streams flow correctly with zero "missing schema" errors
 
 ## 2. System Architecture
 
-```
-┌─────────┐    ZMQ     ┌──────────────────────────────┐
-│  srsUE  │◄──────────►│  srsRAN gNB (jbpf-enabled)   │
-│         │            │                              │
-└─────────┘            │  MAC Scheduler Hooks:        │
-                       │  ├─ mac_sched_crc_indication  │
-                       │  ├─ mac_sched_ul_bsr_indication│
-                       │  ├─ mac_sched_ul_phr_indication│
-                       │  ├─ mac_sched_uci_indication  │
-                       │  ├─ mac_sched_harq_dl         │
-                       │  ├─ mac_sched_harq_ul         │
-                       │  ├─ mac_sched_ue_deletion     │
-                       │  └─ report_stats (periodic)   │
-                       │                              │
-                       │  jbpf IPC ──► /tmp/jbpf/     │
-                       └──────────┬───────────────────┘
-                                  │ IPC socket
-                       ┌──────────┴───────────────────┐
-                       │  srsran_reverse_proxy        │
-                       │  (IPC ↔ TCP on port 30450)   │
-                       └──────────┬───────────────────┘
-                                  │ TCP
-                       ┌──────────┴───────────────────┐
-                       │  jrtc (jrt-controller)       │
-                       │  Routes data streams         │
-                       └──────────┬───────────────────┘
-                                  │ UDP port 20788
-                       ┌──────────┴───────────────────┐
-                       │  jrtc-ctl decoder            │
-                       │  (gRPC on TCP 20789 for      │
-                       │   schema registration,       │
-                       │   UDP 20788 for data)        │
-                       │                              │
-                       │  Output: decoded protobuf    │
-                       │  JSON to stdout/log          │
-                       └──────────────────────────────┘
-```
+![System Architecture](figures/fig_system_architecture.png)
+
+*Figure: Full pipeline — jrtc → gNB (with jBPF hooks) → ZMQ channel broker → srsUE → Reverse Proxy → Decoder → InfluxDB → Grafana. See also the [telemetry data flow](figures/fig_telemetry_flow.png).*
 
 The **10 eBPF codelets** are organized as:
 
