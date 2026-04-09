@@ -11,6 +11,10 @@ A stress injection framework applies 23 system-level scenarios (CPU, memory, sch
 ## Architecture
 
 ```
+Open5GS 5G Core (AMF :38412 / SMF / UPF)   <-- system service, always running
+    | N2 NGAP (control)
+    | N3 GTP-U (user plane, UE IP 10.45.0.0/16)
+    |
 gNB (jBPF) --ZMQ--> Channel Broker --ZMQ--> srsUE --> iperf3 UL :5201
     |           (fading + AWGN +                  +-> iperf3 DL :5202 (--reverse)
     |            interference)                    +-> ping RTT -> /tmp/ping_ue.log

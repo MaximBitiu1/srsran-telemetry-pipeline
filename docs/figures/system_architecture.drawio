@@ -1,0 +1,219 @@
+<mxGraphModel dx="1422" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1000" math="0" shadow="0">
+  <root>
+    <mxCell id="0" />
+    <mxCell id="1" parent="0" />
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- TITLE                                                         -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <mxCell id="title" value="srsRAN 5G NR jBPF Telemetry Pipeline — System Architecture" style="text;html=1;fontSize=18;fontStyle=1;align=center;verticalAlign=middle;whiteSpace=wrap;fillColor=none;strokeColor=none;fontColor=#1a1a1a;" vertex="1" parent="1">
+      <mxGeometry x="300" y="10" width="1000" height="40" as="geometry" />
+    </mxCell>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- SWIM-LANE BACKGROUNDS                                         -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- Radio / Air Interface lane -->
+    <mxCell id="lane_radio" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;opacity=30;arcSize=4;" vertex="1" parent="1">
+      <mxGeometry x="20" y="60" width="480" height="880" as="geometry" />
+    </mxCell>
+    <mxCell id="lane_radio_label" value="Radio / Air Interface" style="text;html=1;fontSize=13;fontStyle=1;align=center;verticalAlign=top;fillColor=none;strokeColor=none;fontColor=#1a6faf;" vertex="1" parent="1">
+      <mxGeometry x="20" y="65" width="480" height="30" as="geometry" />
+    </mxCell>
+
+    <!-- jBPF Instrumentation lane -->
+    <mxCell id="lane_jbpf" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;opacity=30;arcSize=4;" vertex="1" parent="1">
+      <mxGeometry x="520" y="60" width="440" height="880" as="geometry" />
+    </mxCell>
+    <mxCell id="lane_jbpf_label" value="jBPF Instrumentation" style="text;html=1;fontSize=13;fontStyle=1;align=center;verticalAlign=top;fillColor=none;strokeColor=none;fontColor=#6a0dad;" vertex="1" parent="1">
+      <mxGeometry x="520" y="65" width="440" height="30" as="geometry" />
+    </mxCell>
+
+    <!-- Data Pipeline lane -->
+    <mxCell id="lane_data" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;opacity=30;arcSize=4;" vertex="1" parent="1">
+      <mxGeometry x="980" y="60" width="440" height="880" as="geometry" />
+    </mxCell>
+    <mxCell id="lane_data_label" value="Data Pipeline" style="text;html=1;fontSize=13;fontStyle=1;align=center;verticalAlign=top;fillColor=none;strokeColor=none;fontColor=#1a8c8c;" vertex="1" parent="1">
+      <mxGeometry x="980" y="65" width="440" height="30" as="geometry" />
+    </mxCell>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- RADIO / AIR INTERFACE COLUMN                                   -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+
+    <!-- jrtc -->
+    <mxCell id="jrtc" value="&lt;b&gt;jrt-controller (jrtc)&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;eBPF runtime controller&lt;br&gt;IPC shared memory&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#6a0dad;fontColor=#ffffff;strokeColor=#4a0080;arcSize=12;shadow=1;" vertex="1" parent="1">
+      <mxGeometry x="110" y="110" width="300" height="70" as="geometry" />
+    </mxCell>
+
+    <!-- Open5GS 5G Core -->
+    <mxCell id="open5gs" value="&lt;b&gt;Open5GS — 5G Core (5GC)&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;AMF :38412 (N2 NGAP) · SMF · UPF&lt;br&gt;Assigns UE IP 10.45.0.0/16 · routes user-plane data&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1a3c5e;fontColor=#ffffff;strokeColor=#0f2540;arcSize=12;shadow=1;" vertex="1" parent="1">
+      <mxGeometry x="110" y="192" width="300" height="55" as="geometry" />
+    </mxCell>
+
+    <!-- gNB -->
+    <mxCell id="gnb" value="&lt;b&gt;srsRAN gNB&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;5G NR base station (jBPF-instrumented)&lt;br&gt;ZMQ TX :4000 / RX :4001&lt;br&gt;WebSocket :8001 (standard metrics)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1a6faf;fontColor=#ffffff;strokeColor=#0e4d7a;arcSize=12;shadow=1;" vertex="1" parent="1">
+      <mxGeometry x="110" y="250" width="300" height="90" as="geometry" />
+    </mxCell>
+
+    <!-- ZMQ Channel Broker -->
+    <mxCell id="broker" value="&lt;b&gt;ZMQ Channel Broker&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;(C / GRC variants)&lt;br&gt;Fading (Rician/Rayleigh/EPA/EVA/ETU)&lt;br&gt;AWGN + Interference injection&lt;br&gt;gNB-side :4000/:4001 — UE-side :2000/:2001&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#8b6914;fontColor=#ffffff;strokeColor=#6b4f0a;arcSize=12;shadow=1;" vertex="1" parent="1">
+      <mxGeometry x="110" y="420" width="300" height="100" as="geometry" />
+    </mxCell>
+
+    <!-- srsUE -->
+    <mxCell id="ue" value="&lt;b&gt;srsUE (NR)&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;5G NR user equipment&lt;br&gt;ZMQ TX :2001 / RX :2000&lt;br&gt;netns ue1 — tun_srsue&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2e8b57;fontColor=#ffffff;strokeColor=#1e6b3a;arcSize=12;shadow=1;" vertex="1" parent="1">
+      <mxGeometry x="110" y="600" width="300" height="80" as="geometry" />
+    </mxCell>
+
+    <!-- Traffic / Test -->
+    <mxCell id="traffic" value="&lt;b&gt;Traffic / Test&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;iperf3 UL :5201 / DL :5202&lt;br&gt;ICMP ping&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#555555;fontColor=#ffffff;strokeColor=#333333;arcSize=12;shadow=1;" vertex="1" parent="1">
+      <mxGeometry x="110" y="760" width="300" height="70" as="geometry" />
+    </mxCell>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- jBPF INSTRUMENTATION COLUMN                                    -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+
+    <!-- eBPF Codelets -->
+    <mxCell id="codelets" value="&lt;b&gt;~60 eBPF Codelets&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;12 codelet sets — 17 schemas&lt;br&gt;Protobuf output — 1 ms granularity&lt;br&gt;MAC / RLC / PDCP / FAPI / RRC / NGAP / perf&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#6a0dad;fontColor=#ffffff;strokeColor=#4a0080;arcSize=12;shadow=1;" vertex="1" parent="1">
+      <mxGeometry x="570" y="250" width="340" height="90" as="geometry" />
+    </mxCell>
+
+    <!-- Reverse Proxy -->
+    <mxCell id="proxy" value="&lt;b&gt;Reverse Proxy&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;IPC-to-TCP bridge&lt;br&gt;Port :30450&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1a8c8c;fontColor=#ffffff;strokeColor=#0e6060;arcSize=12;shadow=1;" vertex="1" parent="1">
+      <mxGeometry x="600" y="420" width="280" height="70" as="geometry" />
+    </mxCell>
+
+    <!-- Standard Metrics -->
+    <mxCell id="stdmetrics" value="&lt;b&gt;Standard Metrics&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;capture_standard_metrics.py&lt;br&gt;WebSocket :8001 — ~1 s granularity&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#555555;fontColor=#ffffff;strokeColor=#333333;arcSize=12;shadow=1;" vertex="1" parent="1">
+      <mxGeometry x="600" y="600" width="280" height="70" as="geometry" />
+    </mxCell>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- DATA PIPELINE COLUMN                                           -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+
+    <!-- Decoder -->
+    <mxCell id="decoder" value="&lt;b&gt;Decoder&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;telemetry_to_influxdb.py&lt;br&gt;gRPC :20789 — UDP :20788&lt;br&gt;Protobuf → JSON → line protocol&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#b22222;fontColor=#ffffff;strokeColor=#8b1a1a;arcSize=12;shadow=1;" vertex="1" parent="1">
+      <mxGeometry x="1050" y="250" width="300" height="90" as="geometry" />
+    </mxCell>
+
+    <!-- InfluxDB -->
+    <mxCell id="influxdb" value="&lt;b&gt;InfluxDB 1.x&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;Time-series database&lt;br&gt;DB: srsran_telemetry — Port :8086&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#8b0000;fontColor=#ffffff;strokeColor=#5c0000;arcSize=12;shadow=1;" vertex="1" parent="1">
+      <mxGeometry x="1050" y="460" width="300" height="70" as="geometry" />
+    </mxCell>
+
+    <!-- Grafana -->
+    <mxCell id="grafana" value="&lt;b&gt;Grafana Dashboard&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;36 panels — Port :3000&lt;br&gt;Auto-refresh 5 s — InfluxQL queries&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e65c00;fontColor=#ffffff;strokeColor=#b34700;arcSize=12;shadow=1;" vertex="1" parent="1">
+      <mxGeometry x="1050" y="640" width="300" height="80" as="geometry" />
+    </mxCell>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- ARROWS — Radio column (vertical)                              -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+
+    <!-- jrtc → gNB: IPC socket (load/unload codelets) -->
+    <mxCell id="a_jrtc_gnb" value="IPC socket (load codelets)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#6a0dad;strokeWidth=2;fontColor=#6a0dad;fontSize=10;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0;entryDx=0;entryDy=0;" edge="1" source="jrtc" target="gnb" parent="1">
+      <mxGeometry relative="1" as="geometry">
+        <Array as="points">
+          <mxPoint x="80" y="145" />
+          <mxPoint x="80" y="250" />
+        </Array>
+      </mxGeometry>
+    </mxCell>
+
+    <!-- Open5GS ↔ gNB: N2 NGAP (control plane) + N3 GTP-U (user plane) -->
+    <mxCell id="a_5gc_gnb" value="N2 NGAP (control) + N3 GTP-U (user plane)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#1a3c5e;strokeWidth=2;fontColor=#1a3c5e;fontSize=10;startArrow=classic;startFill=1;endArrow=classic;endFill=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="open5gs" target="gnb" parent="1">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+
+    <!-- jrtc → eBPF Codelets: codelet lifecycle management (cross-lane) -->
+    <mxCell id="a_jrtc_codelets" value="codelet lifecycle&lt;br&gt;(load / unload / reconfigure)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#4a0080;strokeWidth=1.5;fontColor=#4a0080;fontSize=10;dashed=1;dashPattern=6 3;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0;entryDx=0;entryDy=0;" edge="1" source="jrtc" target="codelets" parent="1">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+
+    <!-- srsUE ↔ gNB: logical NR Uu interface (routed left of radio column) -->
+    <mxCell id="a_ue_gnb_logical" value="NR Uu (logical air interface)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#2e8b57;strokeWidth=1.5;fontColor=#2e8b57;fontSize=10;dashed=1;dashPattern=5 5;startArrow=classic;startFill=1;endArrow=classic;endFill=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" source="ue" target="gnb" parent="1">
+      <mxGeometry relative="1" as="geometry">
+        <Array as="points">
+          <mxPoint x="45" y="640" />
+          <mxPoint x="45" y="295" />
+        </Array>
+      </mxGeometry>
+    </mxCell>
+
+    <!-- gNB ↔ Broker: ZMQ bidirectional -->
+    <mxCell id="a_gnb_broker" value="ZMQ IQ samples&lt;br&gt;:4000 / :4001" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8b6914;strokeWidth=2;fontColor=#8b6914;fontSize=10;startArrow=classic;startFill=1;endArrow=classic;endFill=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="gnb" target="broker" parent="1">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+
+    <!-- Broker ↔ srsUE: ZMQ bidirectional -->
+    <mxCell id="a_broker_ue" value="ZMQ IQ samples&lt;br&gt;:2000 / :2001" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8b6914;strokeWidth=2;fontColor=#8b6914;fontSize=10;startArrow=classic;startFill=1;endArrow=classic;endFill=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="broker" target="ue" parent="1">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+
+    <!-- srsUE ↔ Traffic: UDP/ICMP -->
+    <mxCell id="a_ue_traffic" value="UDP / SCTP / ICMP" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#555555;strokeWidth=2;fontColor=#555555;fontSize=10;startArrow=classic;startFill=1;endArrow=classic;endFill=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="ue" target="traffic" parent="1">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- ARROWS — Horizontal: Radio → jBPF Instrumentation              -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+
+    <!-- gNB → eBPF Codelets: jBPF hooks -->
+    <mxCell id="a_gnb_codelets" value="jBPF hooks (internal)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#6a0dad;strokeWidth=2;fontColor=#6a0dad;fontSize=10;dashed=1;dashPattern=8 4;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" source="gnb" target="codelets" parent="1">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+
+    <!-- gNB → Standard Metrics: WebSocket JSON -->
+    <mxCell id="a_gnb_stdmetrics" value="JSON :8001" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#888888;strokeWidth=1.5;fontColor=#555555;fontSize=10;dashed=1;dashPattern=4 4;exitX=1;exitY=0.8;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" source="gnb" target="stdmetrics" parent="1">
+      <mxGeometry relative="1" as="geometry">
+        <Array as="points">
+          <mxPoint x="500" y="322" />
+          <mxPoint x="500" y="635" />
+        </Array>
+      </mxGeometry>
+    </mxCell>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- ARROWS — jBPF Instrumentation internal + to Data Pipeline      -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+
+    <!-- eBPF Codelets → Reverse Proxy: UDP protobuf -->
+    <mxCell id="a_codelets_proxy" value="UDP protobuf" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#6a0dad;strokeWidth=2;fontColor=#6a0dad;fontSize=10;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="codelets" target="proxy" parent="1">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+
+    <!-- Reverse Proxy → Decoder: TCP forwarded -->
+    <mxCell id="a_proxy_decoder" value="TCP :20788 / gRPC :20789" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#1a8c8c;strokeWidth=2;fontColor=#1a8c8c;fontSize=10;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" source="proxy" target="decoder" parent="1">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+
+    <!-- Standard Metrics → InfluxDB: HTTP write -->
+    <mxCell id="a_stdmetrics_influx" value="HTTP write&lt;br&gt;line protocol" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#888888;strokeWidth=1.5;fontColor=#555555;fontSize=10;dashed=1;dashPattern=4 4;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.8;entryDx=0;entryDy=0;" edge="1" source="stdmetrics" target="influxdb" parent="1">
+      <mxGeometry relative="1" as="geometry">
+        <Array as="points">
+          <mxPoint x="970" y="635" />
+          <mxPoint x="970" y="516" />
+        </Array>
+      </mxGeometry>
+    </mxCell>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- ARROWS — Data Pipeline (vertical)                              -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+
+    <!-- Decoder → InfluxDB: HTTP line protocol -->
+    <mxCell id="a_decoder_influx" value="HTTP write :8086&lt;br&gt;line protocol" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8b0000;strokeWidth=2;fontColor=#8b0000;fontSize=10;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="decoder" target="influxdb" parent="1">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+
+    <!-- InfluxDB → Grafana: InfluxQL -->
+    <mxCell id="a_influx_grafana" value="InfluxQL query" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#e65c00;strokeWidth=2;fontColor=#e65c00;fontSize=10;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="influxdb" target="grafana" parent="1">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+
+  </root>
+</mxGraphModel>
