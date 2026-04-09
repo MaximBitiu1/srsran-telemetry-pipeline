@@ -20,7 +20,7 @@ gNB (jBPF) --ZMQ--> Channel Broker --ZMQ--> srsUE --> iperf3 UL :5201
     +-- jrtc -> gRPC Decoder -> /tmp/decoder.log
                                     |
                                     v
-                        telemetry_to_influxdb.py -> InfluxDB -> Grafana (45 panels)
+                        telemetry_to_influxdb.py -> InfluxDB -> Grafana (36 panels)
 ```
 
 ## Quick Start
@@ -99,6 +99,7 @@ project_extension/  Stress anomaly extension -- docs, figures, analysis scripts
 - [**Anomaly Collection Progress Report**](docs/ANOMALY_COLLECTION_REPORT.md) -- Full progress report with plots: channel scenario comparison, stress hook latency analysis, signal-space scatter, and hook latency orthogonality demonstration
 - [**Janus vs Standard Logs**](docs/comparison/JANUS_VS_STANDARD_LOGS.md) -- Side-by-side comparison of Janus and standard srsRAN metrics: overlapping metric validation, correlation analysis, 13 plots, CPU overhead, and capability matrix
 - [**Custom SINR Codelet**](docs/custom-codelet/CUSTOM_SINR_CODELET.md) -- Custom jBPF codelet with online variance and sliding window average: BPF constraints, build guide, Grafana panels, live verification results
+- [**Benchmarking**](docs/BENCHMARKING.md) -- CPU overhead measurement (< 1% of one core), per-hook latency table, scheduler fault spike (7,289 µs), bandwidth saving from in-hook analytics (99.7% / 308× reduction)
 
 
 
