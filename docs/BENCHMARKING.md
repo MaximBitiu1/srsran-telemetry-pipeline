@@ -82,11 +82,7 @@ Total invocations: 2,667,493 across 22 hooks. CPU overhead: **0.59%**.
   session and contribute negligible CPU.
 - Measured CPU overhead is **< 1%** of one core across both datasets.
 
-> **Note on methodology**: this is an analytical estimate derived from telemetry, not a direct
-> OFF/ON experiment. A direct measurement would require running the same iperf3 session twice
-> (once with no codelets loaded, once with all codelets loaded) and comparing CPU samples from
-> `mpstat` or `perf stat`. The telemetry-derived estimate is consistent with the eBPF literature
-> which reports sub-1% overhead for in-kernel hook programs of this complexity.
+This per-hook breakdown is derived analytically from the telemetry (invocations × p50 execution time). The direct OFF/ON experiment above is the primary result; the per-hook table provides the per-layer breakdown that explains where that overhead sits.
 
 ---
 
