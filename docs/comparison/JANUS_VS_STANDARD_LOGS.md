@@ -82,7 +82,7 @@ Both databases were cleared before starting.
 
 ### Data flow
 
-![System architecture — dual telemetry channels](../figures/fig_system_architecture.png)
+![System architecture — dual telemetry channels](../figures/final_system_arch.jpeg)
 
 *Two independent telemetry channels share the same gNB: Janus hooks (jBPF) route through the Reverse Proxy → Decoder → InfluxDB 1.x → Grafana :3000, while the standard WebSocket metrics server (:8001) feeds into InfluxDB 3 / Grafana :3300.*
 
