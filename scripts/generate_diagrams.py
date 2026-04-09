@@ -66,102 +66,143 @@ def arrow(ax, x1, y1, x2, y2, label="", color="#444444", lw=1.5,
 # Figure 1 — Full System Architecture
 # ══════════════════════════════════════════════════════════════════════════════
 def fig_system_architecture():
-    fig, ax = plt.subplots(figsize=(14, 9))
+    """
+    Clean 3-zone layout:
+      LEFT  (x=2.0) : Radio stack — jrtc / gNB / Broker / UE / Traffic (vertical)
+      MIDDLE (x=6.5) : jBPF output path — Codelets + Reverse Proxy (horizontal from gNB)
+      RIGHT  (x=11.0): Storage/viz — Decoder / InfluxDB / Grafana (vertical)
+      BOTTOM (x=6.5) : Standard metrics path (separate horizontal lane)
+
+    All arrows connect box edges to box edges with no overlapping labels.
+    """
+    fig, ax = plt.subplots(figsize=(15, 9))
     fig.patch.set_facecolor(C["bg"])
     ax.set_facecolor(C["bg"])
-    ax.set_xlim(0, 14)
+    ax.set_xlim(0, 15)
     ax.set_ylim(0, 9)
     ax.axis("off")
     ax.set_title("srsRAN 5G NR jBPF Telemetry Pipeline — System Architecture",
                  fontsize=13, fontweight="bold", color=C["text"], pad=12)
 
-    # ── LEFT COLUMN: Radio stack ───────────────────────────────────────────
-    # jrtc
-    box(ax, 3.5, 8.1, 2.6, 0.7, "jrt-controller (jrtc)",
-        "eBPF runtime  |  port 3001", color=C["jrtc"], fontsize=8.5)
+    # ── Zone labels (background bands) ────────────────────────────────────
+    for xl, xr, label, col in [
+        (0.1,  4.1,  "Radio / Air Interface", C["gnb"]),
+        (4.2,  8.8,  "jBPF Instrumentation",  C["jrtc"]),
+        (8.9,  14.9, "Data Pipeline",          C["data"]),
+    ]:
+        ax.add_patch(FancyBboxPatch((xl, 0.3), xr - xl, 8.4,
+                     boxstyle="round,pad=0.1", facecolor=col,
+                     edgecolor="none", alpha=0.06, zorder=0))
+        ax.text((xl + xr) / 2, 8.55, label, ha="center", va="bottom",
+                fontsize=8, color=col, fontweight="bold", alpha=0.7)
 
-    # gNB
-    box(ax, 3.5, 6.7, 2.6, 1.0, "srsRAN gNB",
-        "TX :4000  RX :4001\njBPF-instrumented fork", color=C["gnb"], fontsize=8.5)
+    # ─────────────────────────────────────────────────────────────────────
+    # LEFT COLUMN — Radio stack  (x = 2.0)
+    # ─────────────────────────────────────────────────────────────────────
+    LX = 2.0
+    box(ax, LX, 8.0, 3.0, 0.75, "jrt-controller (jrtc)",
+        "eBPF runtime  ·  IPC socket", color=C["jrtc"], fontsize=8.5)
 
-    # ZMQ Broker
-    box(ax, 3.5, 5.1, 2.6, 0.9, "ZMQ Channel Broker",
-        "Fading · AWGN · Interference\nGRC Python", color=C["broker"], fontsize=8.5)
+    box(ax, LX, 6.5, 3.0, 1.0, "srsRAN gNB",
+        "ZMQ TX :4000  RX :4001\njBPF-instrumented", color=C["gnb"], fontsize=8.5)
 
-    # srsUE
-    box(ax, 3.5, 3.5, 2.6, 0.9, "srsUE (NR-only)",
-        "TX :2001  RX :2000\nnetns ue1  |  tun_srsue", color=C["ue"], fontsize=8.5)
+    box(ax, LX, 4.9, 3.0, 0.9, "ZMQ Channel Broker",
+        "Fading · AWGN · Interference\nGRC Python broker", color=C["broker"], fontsize=8.5)
 
-    # iperf3 / traffic
-    box(ax, 3.5, 2.1, 2.6, 0.7, "Traffic / Test",
-        "iperf3 UL :5201  DL :5202  |  ping", color=C["ue"], fontsize=8, alpha=0.8)
+    box(ax, LX, 3.3, 3.0, 0.9, "srsUE (NR)",
+        "ZMQ RX :2000  TX :2001\nnetns ue1  ·  tun_srsue", color=C["ue"], fontsize=8.5)
 
-    # Radio arrows (left column)
-    arrow(ax, 3.5, 7.75, 3.5, 7.17, "IPC shm")
-    arrow(ax, 3.5, 6.2, 3.5, 5.55, "ZMQ :4000/:4001")
-    arrow(ax, 3.5, 4.65, 3.5, 4.0, "ZMQ :2000/:2001")
-    arrow(ax, 3.5, 3.05, 3.5, 2.45, "UDP/ICMP")
+    box(ax, LX, 1.85, 3.0, 0.7, "Traffic / Test",
+        "iperf3 UL :5201  DL :5202  ·  ping", color=C["ue"], fontsize=8.0, alpha=0.8)
 
-    # ── CENTRE: eBPF codelets ─────────────────────────────────────────────
-    box(ax, 7.0, 6.7, 2.2, 1.0, "~60 eBPF Codelets",
-        "11 codelet sets\n17 telemetry schemas", color=C["jrtc"], fontsize=8.5)
+    # Left-column vertical arrows (all stay at x=LX)
+    arrow(ax, LX, 7.62, LX, 7.0, "IPC shm")                     # jrtc → gNB
+    arrow(ax, LX, 6.0,  LX, 5.35, "ZMQ :4000/:4001")            # gNB → Broker
+    arrow(ax, LX, 4.45, LX, 3.75, "ZMQ :2000/:2001")            # Broker → UE
+    arrow(ax, LX, 2.85, LX, 2.2,  "UDP / ICMP")                 # UE → Traffic
 
-    # Codelet arrows
-    arrow(ax, 4.8, 6.7, 5.9, 6.7, "hook", color=C["jrtc"])
-    arrow(ax, 8.1, 6.7, 9.0, 6.7, "protobuf\nUDP :20788", color=C["jrtc"],
-          label_offset=(0, 0.18))
+    # ─────────────────────────────────────────────────────────────────────
+    # MIDDLE — jBPF output  (Codelets x=6.5, RevProxy x=6.5 different y)
+    # ─────────────────────────────────────────────────────────────────────
+    MX = 6.5
+    box(ax, MX, 6.5, 2.8, 1.0, "~60 eBPF Codelets",
+        "11 codelet sets · 17 schemas\nProtobuf output", color=C["jrtc"], fontsize=8.5)
 
-    # Reverse Proxy
-    box(ax, 7.0, 5.1, 2.2, 0.7, "Reverse Proxy",
-        "IPC→TCP  |  :30450", color=C["data"], fontsize=8.5)
-    arrow(ax, 4.8, 6.4, 5.9, 5.1, color=C["data"])
-    arrow(ax, 8.1, 5.1, 9.0, 5.1, "gRPC\n:20789", color=C["data"],
-          label_offset=(0, 0.18))
+    box(ax, MX, 4.9, 2.8, 0.75, "Reverse Proxy",
+        "IPC → TCP  ·  :30450", color=C["data"], fontsize=8.5)
 
-    # ── RIGHT COLUMN: Data pipeline ───────────────────────────────────────
-    # Decoder
-    box(ax, 10.5, 6.7, 2.2, 0.9, "Decoder",
-        "gRPC :20789  UDP :20788\n/tmp/decoder.log", color=C["data"], fontsize=8.5)
+    # gNB → Codelets  (horizontal at y=6.5)
+    arrow(ax, 3.5, 6.5, 5.1, 6.5, "jBPF hook", color=C["jrtc"])
 
-    # InfluxDB
-    box(ax, 10.5, 5.1, 2.2, 0.7, "InfluxDB 1.x",
-        "db: srsran_telemetry  |  :8086", color=C["infra"], fontsize=8.5)
-    arrow(ax, 10.5, 6.25, 10.5, 5.45, "line protocol")
+    # gNB → Reverse Proxy  (leave gNB right side, arrive proxy left)
+    arrow(ax, 3.5, 6.15, 5.1, 4.9, "IPC :30450", color=C["data"])
 
-    # Grafana
-    box(ax, 10.5, 3.5, 2.2, 0.9, "Grafana Dashboard",
-        "45 panels  |  :3000\nhttp://localhost:3000/…", color=C["grafana"], fontsize=8.5)
-    arrow(ax, 10.5, 4.75, 10.5, 3.95, "InfluxQL")
+    # ─────────────────────────────────────────────────────────────────────
+    # RIGHT COLUMN — Data pipeline  (x = 11.0)
+    # ─────────────────────────────────────────────────────────────────────
+    RX = 11.2
+    box(ax, RX, 6.5, 3.0, 1.0, "Decoder",
+        "gRPC :20789  UDP :20788\n/tmp/decoder.log  (JSON lines)", color=C["data"], fontsize=8.5)
 
-    # telemetry_to_influxdb.py label
-    ax.text(10.5, 5.83, "telemetry_to_influxdb.py", ha="center", va="center",
-            fontsize=7, color=C["data"], style="italic")
+    box(ax, RX, 4.6, 3.0, 0.75, "InfluxDB 1.x",
+        "srsran_telemetry  ·  :8086", color=C["infra"], fontsize=8.5)
 
-    # Decoder → ingestor → InfluxDB connector
-    arrow(ax, 9.0, 6.7, 9.4, 6.7, color=C["data"])
+    box(ax, RX, 3.0, 3.0, 0.9, "Grafana Dashboard",
+        "36 panels  ·  :3000\nauto-refresh 5 s", color=C["grafana"], fontsize=8.5)
 
-    # ── BOTTOM: Standard metrics channel ─────────────────────────────────
-    box(ax, 7.0, 2.1, 2.8, 0.8, "Standard Metrics (WebSocket)",
-        "remote_control  |  ws://127.0.0.1:8001", color="#555555", fontsize=8)
-    arrow(ax, 4.8, 6.1, 5.6, 2.5, color="#888888", style="-|>")
-    ax.text(5.0, 4.2, "JSON metrics\n~1s aggregate", ha="center", va="center",
-            fontsize=7, color="#666666", style="italic")
-    arrow(ax, 8.4, 2.1, 9.5, 2.1, color="#888888",
-          label="capture_standard_metrics.py\n→ /tmp/standard_metrics.jsonl",
-          label_offset=(0.6, 0.3))
+    # Codelets → Decoder  (horizontal at y=6.5)
+    arrow(ax, 7.9, 6.5, 9.7, 6.5, "UDP :20788", color=C["jrtc"])
 
-    # ── LEGEND ────────────────────────────────────────────────────────────
+    # RevProxy → Decoder  (horizontal at y=4.9 → y=6.2, slight diagonal)
+    arrow(ax, 7.9, 4.9, 9.7, 6.15, "gRPC :20789", color=C["data"])
+
+    # Decoder → InfluxDB  (vertical)
+    arrow(ax, RX, 6.0, RX, 4.98, "telemetry_to_influxdb.py\nline protocol")
+
+    # InfluxDB → Grafana  (vertical)
+    arrow(ax, RX, 4.22, RX, 3.45, "InfluxQL")
+
+    # ─────────────────────────────────────────────────────────────────────
+    # BOTTOM LANE — Standard metrics (gNB WebSocket path)
+    # ─────────────────────────────────────────────────────────────────────
+    box(ax, MX, 1.85, 2.8, 0.7, "Standard Metrics",
+        "WebSocket :8001  ·  ~1 s avg", color="#555555", fontsize=8.0)
+
+    # gNB → Standard Metrics:
+    # Route: right edge of gNB (3.5, 6.5) → elbow down at x=4.0 to y=2.2 → right to box left edge (5.1, 2.2)
+    # Segment 1: gNB right edge → elbow point (no arrowhead)
+    ax.annotate("", xy=(4.0, 2.55), xytext=(3.5, 6.5),
+                arrowprops=dict(arrowstyle="-", color="#888888", lw=1.2,
+                                connectionstyle="arc3,rad=0.0"), zorder=2)
+    # Segment 2: elbow → Standard Metrics left edge (arrowhead here)
+    ax.annotate("", xy=(5.1, 1.85), xytext=(4.0, 1.85),
+                arrowprops=dict(arrowstyle="->", color="#888888", lw=1.2,
+                                connectionstyle="arc3,rad=0.0"), zorder=2)
+    # Vertical connector at elbow
+    ax.plot([4.0, 4.0], [2.55, 1.85], color="#888888", lw=1.2, zorder=2)
+    # Label on the vertical segment
+    ax.text(4.25, 4.5, "JSON\n:8001", ha="left", va="center",
+            fontsize=7, color="#888888", style="italic")
+
+    # Standard Metrics → file
+    ax.text(8.05, 1.85, "capture_standard_metrics.py  →  /tmp/standard_metrics.jsonl",
+            ha="left", va="center", fontsize=7.5, color="#555555", style="italic")
+    arrow(ax, 7.9, 1.85, 8.0, 1.85, color="#888888", lw=1.2)
+
+    # ─────────────────────────────────────────────────────────────────────
+    # LEGEND
+    # ─────────────────────────────────────────────────────────────────────
     legend_items = [
-        mpatches.Patch(color=C["jrtc"], label="jBPF / Codelets"),
-        mpatches.Patch(color=C["gnb"],  label="gNB (Radio)"),
-        mpatches.Patch(color=C["ue"],   label="UE / Traffic"),
-        mpatches.Patch(color=C["broker"], label="Channel Broker"),
-        mpatches.Patch(color=C["data"], label="Data Pipeline"),
-        mpatches.Patch(color=C["infra"], label="Storage / DB"),
+        mpatches.Patch(color=C["jrtc"],    label="jBPF / Codelets"),
+        mpatches.Patch(color=C["gnb"],     label="gNB (Radio)"),
+        mpatches.Patch(color=C["ue"],      label="UE / Traffic"),
+        mpatches.Patch(color=C["broker"],  label="Channel Broker"),
+        mpatches.Patch(color=C["data"],    label="Data Pipeline"),
+        mpatches.Patch(color=C["infra"],   label="Storage / DB"),
         mpatches.Patch(color=C["grafana"], label="Visualisation"),
     ]
-    ax.legend(handles=legend_items, loc="lower left", fontsize=8,
-              framealpha=0.9, ncol=4, bbox_to_anchor=(0.0, 0.0))
+    ax.legend(handles=legend_items, loc="lower right", fontsize=8,
+              framealpha=0.9, ncol=4, bbox_to_anchor=(1.0, 0.0))
 
     plt.tight_layout()
     path = os.path.join(OUT, "fig_system_architecture.png")
@@ -189,7 +230,7 @@ def fig_telemetry_flow():
         (5.6, 3.0, 1.6, 0.9, "Decoder", "gRPC :20789\nUDP :20788", C["data"]),
         (7.8, 3.0, 1.8, 0.9, "telemetry_to_\ninfluxdb.py", "Parse → delta\n→ line protocol", C["data"]),
         (10.1, 3.0, 1.6, 0.9, "InfluxDB 1.x", "srsran_telemetry\n:8086", C["infra"]),
-        (12.1, 3.0, 1.4, 0.9, "Grafana\n45 panels", ":3000", C["grafana"]),
+        (12.1, 3.0, 1.4, 0.9, "Grafana\n36 panels", ":3000", C["grafana"]),
     ]
 
     for x, y, w, h, label, sublabel, color in stages:
@@ -318,7 +359,7 @@ def fig_jbpf_vs_standard():
         ("HARQ failures",          "Count per window",             "Count + consecutive retx state"),
         ("RLC SDU latency",        "Average/max",                  "Per-slot avg/max + distribution"),
         ("Hook execution latency", "NOT AVAILABLE",                "p50/p90/p95/p99 per hook"),
-        ("Grafana panels",         "~20 panels",                   "45 panels"),
+        ("Grafana panels",         "~20 panels",                   "36 panels"),
         ("Infrastructure faults",  "Invisible",                    "Visible via hook_p99 spikes"),
         ("CPU overhead",           "Negligible (poll-based)",       "~3.3% of 1 core @ 25 Mbps"),
     ]

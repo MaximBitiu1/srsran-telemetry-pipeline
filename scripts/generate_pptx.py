@@ -213,58 +213,85 @@ slide_header(sl, "What We Built",
 img(sl, FIG + "/fig_system_architecture.png", 0.3, 1.1, 12.7, 5.7)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# SLIDE 4 — BAREMETAL INSTALLATION CHALLENGES
+# SLIDE 4a — WHY k3d DIDN'T WORK
 # ══════════════════════════════════════════════════════════════════════════════
 sl = new_slide()
 bg(sl)
-slide_header(sl, "Getting It to Run — Baremetal Installation Challenges",
-             "Several non-trivial fixes were needed before any telemetry could flow")
+slide_header(sl, "First Attempt: k3d Kubernetes Deployment",
+             "The official Microsoft deployment path — and why it didn't work for us")
 
-# Left column
-txbox(sl, "Challenge 1: eBPF Verifier Failures", 0.4, 1.15, 6.1, 0.4,
-      size=15, bold=True, color=YELLOW)
+# Intro box
+rect(sl, 0.4, 1.1, 12.5, 0.75, RGBColor(0x0a, 0x20, 0x40),
+     "The jrtc-apps repo (Microsoft) recommends k3d as the default deployment — "
+     "lightweight Kubernetes running locally, no physical hardware required.",
+     tsize=14, tbold=False, tcolor=LGREY, line_color=BLUE)
+
+# Left: what k3d promised
+txbox(sl, "What k3d Offers", 0.4, 2.05, 5.8, 0.4, size=15, bold=True, color=BLUE)
 txbox_multi(sl, [
-    (True, "All 10 MAC codelets had eBPF verifier errors and refused to load"),
-    (True, "Hash map relocation types didn't match runtime expectations"),
-    (True, "JBPF_HASHMAP_CLEAR loops rejected (too complex for verifier)"),
-    (True, "Fix: corrected map definitions + removed clear loops → stats now cumulative"),
-], 0.4, 1.55, 6.1, 2.0, size=13)
+    (True, "Single Helm chart deploys gNB + jrtc + decoder + UE"),
+    (True, "ZMQ mode available — no radio hardware needed"),
+    (True, "Designed to run on a single laptop or workstation"),
+    (True, "Containers handle all dependencies automatically"),
+], 0.4, 2.45, 5.8, 2.2, size=13)
 
-txbox(sl, "Challenge 2: jrtc-ctl Bug — HARQ Schema Collision", 0.4, 3.65, 6.1, 0.4,
-      size=15, bold=True, color=YELLOW)
+# Right: what went wrong
+txbox(sl, "What Went Wrong", 6.9, 2.05, 5.9, 0.4, size=15, bold=True, color=RED)
 txbox_multi(sl, [
-    (True, "DL and UL HARQ share the same .proto schema name"),
-    (True, "jrtc-ctl's map[string][]byte overwrote DL with UL at registration"),
-    (True, 'Fix: changed to map[string][][]byte + append() in Go source'),
-], 0.4, 4.1, 6.1, 1.7, size=13)
+    (True, "Helm chart values.yaml was built for enterprise O-RAN servers"),
+    (True, "Pods stayed in Pending — Kubernetes couldn't schedule them"),
+    (True, "Required resources our machine couldn't provide:"),
+    (False, "  · Hugepages (4 Gi+) — not configured on the k3d node"),
+    (False, "  · SR-IOV device plugin — Intel NIC feature not present"),
+    (False, "  · DPDK CPU pinning — assumes 30+ dedicated physical cores"),
+    (False, "  · Physical RU MAC/VLAN bindings in the config"),
+], 6.9, 2.45, 5.9, 3.0, size=13)
 
-txbox(sl, "Challenge 3: Context Cancellation Race", 0.4, 5.85, 6.1, 0.4,
-      size=15, bold=True, color=YELLOW)
-txbox_multi(sl, [
-    (True, "errgroup context cancelled phase-2 codelet load when phase-1 (decoder) finished"),
-    (True, "Fix: split into two sequential errgroups with independent contexts"),
-], 0.4, 6.25, 6.1, 0.9, size=13)
+# Bottom conclusion
+rect(sl, 0.4, 5.8, 12.5, 0.9, RGBColor(0x30, 0x10, 0x10),
+     "The chart worked as designed — it was designed for a different class of machine. "
+     "We needed a different approach.",
+     tsize=14, tbold=True, tcolor=YELLOW, line_color=RED)
 
-# Right column
-txbox(sl, "Challenge 4: gNB Config YAML Keys", 6.8, 1.15, 6.1, 0.4,
-      size=15, bold=True, color=YELLOW)
-txbox_multi(sl, [
-    (True, "enable_json_metrics and enable_metrics_subscription do NOT exist"),
-    (True, "Correct key is metrics: enable_json: true"),
-    (True, "Wrong keys cause silent gNB startup failure (IPC socket never appears)"),
-], 6.8, 1.55, 6.1, 1.6, size=13)
+# ══════════════════════════════════════════════════════════════════════════════
+# SLIDE 4b — BAREMETAL: WHAT WE DID
+# ══════════════════════════════════════════════════════════════════════════════
+sl = new_slide()
+bg(sl)
+slide_header(sl, "The Fix: Bare Metal Deployment on Ubuntu 22.04",
+             "Skipped the Helm chart entirely — built and ran everything natively")
 
-txbox(sl, "Challenge 5: IPC Socket Timing", 6.8, 3.25, 6.1, 0.4,
-      size=15, bold=True, color=YELLOW)
-txbox_multi(sl, [
-    (True, "jrtc must start before gNB — IPC socket /tmp/jbpf/jbpf_lcm_ipc"),
-    (True, "created by gNB only after connecting to jrtc shared memory"),
-    (True, "Kill-9 leaves stale socket → launch script waits forever"),
-    (True, "Fix: clean shutdown script + 20s timeout with permission fix"),
-], 6.8, 3.65, 6.1, 2.0, size=13)
+# Step boxes across the slide
+steps = [
+    (BLUE,   "① Build from Source",
+             "Compiled srsRAN (jBPF fork), jBPF runtime, and jrtc manually — "
+             "required LLVM/Clang toolchain and specific kernel headers"),
+    (PURPLE, "② Fix the gNB Config",
+             "Example YAML had invalid keys that silently crashed the gNB at startup. "
+             "Debugged logs, identified correct keys, rewrote the config for ZMQ mode"),
+    (GOLD,   "③ Fix eBPF Verifier Errors",
+             "All 10 MAC codelets failed the eBPF verifier and refused to load. "
+             "Fixed map definitions and removed unsupported hash clear loops"),
+    (TEAL,   "④ Fix jrtc Decoder Bug",
+             "DL and UL HARQ codelets shared the same schema name — the decoder "
+             "silently dropped one stream. Fixed in the jrtc Go source"),
+    (GREEN,  "⑤ Automate Startup",
+             "Built a single launch script that starts all 8 components in correct "
+             "order with dependency checks, timeouts, and clean shutdown"),
+]
 
-rect(sl, 6.8, 5.8, 6.1, 0.9, RGBColor(0x0a, 0x2a, 0x0a),
-     "Result: after all fixes — zero missing-schema errors, all 17 streams flowing",
+box_w = 2.45
+for i, (col, title, body) in enumerate(steps):
+    x = 0.3 + i * (box_w + 0.12)
+    rect(sl, x, 1.15, box_w, 5.5, col, "", line_color=WHITE)
+    txbox(sl, title, x + 0.1, 1.25, box_w - 0.2, 0.55,
+          size=13, bold=True, color=WHITE, align=PP_ALIGN.CENTER)
+    txbox(sl, body, x + 0.1, 1.95, box_w - 0.2, 4.4,
+          size=12, bold=False, color=WHITE)
+
+rect(sl, 0.4, 6.8, 12.5, 0.5, RGBColor(0x0a, 0x2a, 0x0a),
+     "Result: full pipeline running — all 17 telemetry streams flowing, "
+     "36-panel Grafana dashboard live, ZMQ channel broker active",
      tsize=13, tbold=True, tcolor=GREEN, line_color=GREEN)
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -335,57 +362,201 @@ txbox(sl, "★  jbpf_out_perf_list is the ONLY signal sensitive to infrastructur
 # ══════════════════════════════════════════════════════════════════════════════
 sl = new_slide()
 bg(sl)
-slide_header(sl, "45-Panel Real-Time Dashboard",
+slide_header(sl, "36-Panel Real-Time Dashboard",
              "Live Grafana dashboard — every metric from every layer in one view")
 
 txbox_multi(sl, [
     (False, "Dashboard sections:"),
-    (True, "MAC layer (8 panels) — HARQ, SINR, MCS, CRC, BSR, CQI"),
-    (True, "RLC / PDCP (10 panels) — SDU latency, throughput bytes, queue depth"),
-    (True, "FAPI (6 panels) — per-slot scheduler decisions, PRB utilisation"),
-    (True, "jBPF hook latency (8 panels) — p50/p90/p95/p99 per hook"),
-    (True, "RRC / NGAP events (5 panels) — attach/detach, procedure timing"),
-    (True, "UE application layer (5 panels) — iperf3 UL/DL Mbps, ping RTT, jitter, loss"),
-    (True, "Summary + histograms (9 panels) — at-a-glance health"),
+    (True, "Custom SINR Analytics (5 panels) — variance, sliding avg, fill level"),
+    (True, "PHY / MAC — Radio Link Quality (4 panels) — SINR, TX success, HARQ, RSRP"),
+    (True, "MAC Scheduler (5 panels) — BSR, CQI, scheduling requests, MCS, retx"),
+    (True, "FAPI (5 panels) — per-slot MCS/PRB/TBS DL vs UL, SNR, timing advance"),
+    (True, "RLC / PDCP (6 panels) — DL/UL data volume, retx, SDU latency"),
+    (True, "RRC / NGAP (2 panels) — control plane event timelines"),
+    (True, "jBPF hook latency (3 panels) — p50/p99 per hook, invocation count"),
+    (True, "Summary Statistics (6 panels) — SINR, TX%, HARQ, CQI, p50, BSR"),
     (False, ""),
     (False, "Auto-refresh: 5 s  ·  InfluxDB 1.x backend  ·  InfluxQL queries"),
-], 0.4, 1.15, 5.8, 5.6, size=14)
+], 0.4, 1.15, 5.8, 5.6, size=13)
 
-img(sl, FIG + "/fig_telemetry_flow.png", 6.3, 1.1, 6.8, 5.7)
+img(sl, FIG + "/screenshot_grafana1.png", 6.1, 1.1, 7.0, 5.7)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# SLIDE 7 — CHANNEL BROKER
+# SLIDE 7a — THE CHANNEL PROBLEM
 # ══════════════════════════════════════════════════════════════════════════════
 sl = new_slide()
 bg(sl)
-slide_header(sl, "ZMQ Channel Broker — Simulating Real RF Conditions",
-             "GRC Python broker intercepts IQ samples between gNB and UE")
+slide_header(sl, "The Channel Problem — Why a Broker Was Needed",
+             "ZMQ virtual radio gives a perfect channel — useless for a thesis on anomaly detection")
 
-img(sl, FIG + "/fig_channel_broker.png", 0.3, 1.1, 8.5, 5.6)
-
+# Left: problem statement
+rect(sl, 0.3, 1.15, 6.1, 1.8, RGBColor(0x2a, 0x0a, 0x0a), line_color=RED)
+txbox(sl, "The Problem", 0.45, 1.2, 3.0, 0.35, size=13, bold=True, color=RED)
 txbox_multi(sl, [
-    (False, "Two broker implementations:"),
-    (True, "C broker: AWGN + Rician/Rayleigh flat fading (fast, stable)"),
-    (True, "GRC Python: + EPA/EVA/ETU 3GPP profiles, CFO, burst drops, live GUI"),
-    (False, ""),
-    (False, "Recommended config:"),
-    (True, "K=3 dB Rician, SNR=28 dB, fd=5 Hz"),
-    (True, "Pure Rayleigh crashes UE in ~2 min"),
-    (False, ""),
-    (False, "Processing budget:"),
-    (True, "DL: 413 µs  ·  UL: 503 µs"),
-    (True, "< 1 ms slot budget with 500 µs headroom"),
-], 8.9, 1.2, 4.2, 5.6, size=13)
+    (True, "srsRAN ZMQ transport = perfect wire: SINR constant at 42 dB, zero fading, zero loss"),
+    (True, "No RF variation → no channel anomalies → nothing to detect"),
+    (True, "Every dataset would look identical — the thesis has no content"),
+], 0.4, 1.55, 5.9, 1.3, size=12)
+
+# srsUE built-in emulator — why it doesn't work
+rect(sl, 0.3, 3.1, 6.1, 1.55, RGBColor(0x1a, 0x1a, 0x0a), line_color=ORANGE)
+txbox(sl, "Attempt 1: srsUE built-in channel emulator", 0.45, 3.15, 5.8, 0.35, size=13, bold=True, color=ORANGE)
+txbox_multi(sl, [
+    (True, "srsUE has a --channel.model flag (AWGN, EPA, EVA, ETU)"),
+    (True, "Problem: it is wired to the LTE PHY path only — silently ignored in NR mode"),
+    (True, "Confirmed by reading source: NR PHY never calls the channel emulator"),
+], 0.4, 3.5, 5.9, 1.05, size=12)
+
+# C broker solution
+rect(sl, 0.3, 4.75, 6.1, 1.9, RGBColor(0x0a, 0x1a, 0x0a), line_color=GREEN)
+txbox(sl, "Solution: ZMQ IQ-level Broker", 0.45, 4.8, 5.8, 0.35, size=13, bold=True, color=GREEN)
+txbox_multi(sl, [
+    (True, "Intercepts raw IQ samples on the ZMQ socket between gNB and UE"),
+    (True, "No changes to srsRAN source — broker is a transparent proxy"),
+    (True, "C broker: AWGN + Rician fading (fast, low latency)"),
+    (True, "Pure Rayleigh crash: |h|²→0 nulls cause RRC timeout in ~2 min"),
+    (True, "Fix → Rician K=3 dB adds LoS component, prevents complete nulls"),
+    (True, "Sweet spot: K=3 dB, SNR=28 dB, fd=5 Hz → stable 15+ min, 12 HARQ failures"),
+], 0.4, 5.15, 5.9, 1.45, size=12)
+
+# Right: diagram
+img(sl, FIG + "/fig_channel_broker.png", 6.6, 1.15, 6.5, 5.5)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# SLIDE 8 — JANUS VS STANDARD: WHAT EACH SEES
+# SLIDE 7b — FROM C BROKER TO GNU RADIO
 # ══════════════════════════════════════════════════════════════════════════════
 sl = new_slide()
 bg(sl)
-slide_header(sl, "Janus vs Standard Metrics — What Each Channel Sees",
-             "Live side-by-side comparison run during Week 7 evaluation")
+slide_header(sl, "From C Broker to GNU Radio — Adding Realism",
+             "Flat fading is unrealistic; frequency-selective 3GPP profiles needed for the thesis")
 
-img(sl, FIG + "/fig_jbpf_vs_standard.png", 0.3, 1.1, 12.7, 5.7)
+# Left: C broker limitation
+rect(sl, 0.3, 1.15, 5.9, 2.05, RGBColor(0x2a, 0x0a, 0x0a), line_color=RED)
+txbox(sl, "C Broker Limitation: Flat Fading", 0.45, 1.2, 5.6, 0.35, size=13, bold=True, color=RED)
+txbox_multi(sl, [
+    (True, "All OFDM subcarriers fade together by the same random gain"),
+    (True, "Real 5G channels are frequency-selective: different subcarriers"),
+    (True, "  experience different fading (multi-path reflections at different delays)"),
+    (True, "Flat fading produces unrealistic, uniform SINR — all PRBs degraded equally"),
+    (True, "3GPP test profiles (EPA, EVA, ETU) require multi-tap FIR filters, not flat"),
+], 0.4, 1.55, 5.7, 1.55, size=12)
+
+# GRC broker
+rect(sl, 0.3, 3.3, 5.9, 3.4, RGBColor(0x0a, 0x1a, 0x0a), line_color=GREEN)
+txbox(sl, "GRC Python Broker — Built on GNU Radio", 0.45, 3.35, 5.6, 0.35, size=13, bold=True, color=GREEN)
+txbox_multi(sl, [
+    (True, "EPA / EVA / ETU frequency-selective fading (scipy FIR + persistent state zi)"),
+    (True, "  FFT-based per-subcarrier filtering — each tap has independent delay"),
+    (True, "Carrier Frequency Offset (CFO) — Doppler-like phase rotation"),
+    (True, "Burst packet drops — simulate deep fade or interference events"),
+    (True, "Narrowband CW interference injection"),
+    (True, "Time-varying scenario scripts (10 realistic channel sequences)"),
+    (True, "Live QT GUI — view IQ constellation and spectrum in real time"),
+    (True, "Processing budget: DL 413 µs · UL 503 µs < 1 ms slot"),
+], 0.4, 3.7, 5.7, 2.9, size=12)
+
+# Right: GRC live GUI screenshot
+txbox(sl, "Live GRC Broker GUI", 6.5, 1.15, 6.7, 0.35, size=12, bold=True, color=GREEN)
+img(sl, FIG + "/screenshot_grc.png", 6.5, 1.55, 6.7, 5.1)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SLIDE 7c — JANUS VS STANDARD: GOAL
+# ══════════════════════════════════════════════════════════════════════════════
+sl = new_slide()
+bg(sl)
+slide_header(sl, "jBPF vs Standard Metrics — What Were We Trying to Prove?",
+             "Week 7 evaluation — running both telemetry channels simultaneously on the same gNB")
+
+# Left: context
+rect(sl, 0.4, 1.15, 5.8, 1.5, RGBColor(0x0a, 0x20, 0x40), line_color=BLUE)
+txbox(sl, "The Setup", 0.5, 1.2, 5.6, 0.4, size=14, bold=True, color=BLUE)
+txbox(sl, "We ran both telemetry systems on the same gNB at the same time:\n"
+          "jBPF codelets → InfluxDB 1.x   |   Standard metrics → InfluxDB 3\n"
+          "57 minutes of steady-state traffic with Rician fading channel",
+      0.5, 1.6, 5.6, 0.95, size=12, color=LGREY)
+
+# Right: 3 questions
+rect(sl, 6.5, 1.15, 6.6, 1.5, RGBColor(0x0a, 0x20, 0x20), line_color=TEAL)
+txbox(sl, "Three Questions", 6.6, 1.2, 6.4, 0.4, size=14, bold=True, color=TEAL)
+txbox(sl, "1.  Do both systems agree where they measure the same thing?\n"
+          "2.  Why do the numbers differ even for the same metric?\n"
+          "3.  What can jBPF see that standard metrics simply cannot?",
+      6.6, 1.6, 6.3, 0.95, size=12, color=LGREY)
+
+# Middle: 3 findings boxes
+findings = [
+    (GREEN,  "Finding 1 — They Agree",
+             "Where both measure the same signal (SINR, MCS, CQI, BLER), "
+             "values match within 1.5%. The codelets are extracting correct data."),
+    (YELLOW, "Finding 2 — Differences Are Expected",
+             "Throughput shows a 1.95× gap because jBPF measures at the application "
+             "layer while standard metrics measure at the MAC layer — two valid "
+             "measurements of different things."),
+    (RED,    "Finding 3 — jBPF Sees What Standard Cannot",
+             "Hook latency, per-slot FAPI data, RLC/PDCP counters, RRC/NGAP "
+             "procedure timing — none of these exist in the standard interface. "
+             "Infrastructure faults are invisible without them."),
+]
+for i, (col, title, body) in enumerate(findings):
+    x = 0.4 + i * 4.35
+    rect(sl, x, 2.85, 4.1, 3.5, RGBColor(0x08, 0x08, 0x1e), line_color=col)
+    rect(sl, x, 2.85, 4.1, 0.45, col)
+    txbox(sl, title, x+0.1, 2.88, 3.9, 0.38, size=12, bold=True, color=WHITE)
+    txbox(sl, body, x+0.1, 3.38, 3.9, 2.85, size=12, color=LGREY)
+
+rect(sl, 0.4, 6.45, 12.5, 0.55, RGBColor(0x0a, 0x2a, 0x0a),
+     "Conclusion: jBPF is not a replacement for standard metrics — it is a complementary layer "
+     "that adds depth, resolution, and fault visibility that standard monitoring cannot provide.",
+     tsize=12, tbold=True, tcolor=GREEN, line_color=GREEN)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SLIDE 8 — JANUS VS STANDARD: CAPABILITY COMPARISON TABLE
+# ══════════════════════════════════════════════════════════════════════════════
+sl = new_slide()
+bg(sl)
+slide_header(sl, "jBPF vs Standard Metrics — Capability Comparison",
+             "What each telemetry channel can and cannot measure")
+
+# Column headers
+col_w = [5.5, 3.3, 3.3]
+col_x = [0.4, 6.1, 9.6]
+headers = ["Capability", "Standard Metrics", "jBPF (Janus)"]
+h_colors = [BLUE, RGBColor(0x33, 0x66, 0x99), PURPLE]
+for i, (hdr, col, x) in enumerate(zip(headers, h_colors, col_x)):
+    rect(sl, x, 1.1, col_w[i], 0.45, col)
+    txbox(sl, hdr, x+0.1, 1.13, col_w[i]-0.2, 0.38,
+          size=13, bold=True, color=WHITE, align=PP_ALIGN.CENTER)
+
+# Table rows: (capability, standard, jbpf, highlight)
+rows = [
+    ("Update rate",                  "~1 s aggregates",         "Configurable — down to 1 ms per slot",  False),
+    ("Per-slot (1 ms) visibility",   "No",                      "Yes",                                   False),
+    ("SINR / MCS / CQI / BLER",      "Yes",                     "Yes",                                   False),
+    ("Hook execution latency",        "No",                      "Yes — 22 hooks (p50/p99/max)",          True),
+    ("Infrastructure fault detection","No",                      "Yes — only via hook latency",           True),
+    ("Per-layer byte counters",       "No",                      "Yes — RLC and PDCP separately",         False),
+    ("RLC SDU delivery latency",      "No",                      "Yes",                                   False),
+    ("RRC / NGAP procedure timing",   "No",                      "Yes — per-event timestamps",            False),
+    ("Scheduling latency histograms", "Yes",                     "No",                                    False),
+    ("PHR / Rank Indicator",          "Yes",                     "No",                                    False),
+    ("Metric count",                  "~30 fields, 1 table",     "60+ fields, 17 measurements",           False),
+    ("CPU overhead",                  "Negligible",              "~3.3% of one CPU core",                 False),
+]
+
+for i, (cap, std, jbpf, highlight) in enumerate(rows):
+    y = 1.65 + i * 0.44
+    row_bg = RGBColor(0x1a, 0x08, 0x08) if highlight else (
+             RGBColor(0x10, 0x10, 0x28) if i % 2 == 0 else RGBColor(0x0a, 0x0a, 0x1e))
+    border = RED if highlight else RGBColor(0x30, 0x30, 0x50)
+    rect(sl, col_x[0], y, col_w[0], 0.42, row_bg, line_color=border)
+    rect(sl, col_x[1], y, col_w[1], 0.42, row_bg, line_color=border)
+    rect(sl, col_x[2], y, col_w[2], 0.42, row_bg, line_color=border)
+    txt_col = YELLOW if highlight else WHITE
+    txbox(sl, cap,  col_x[0]+0.1, y+0.04, col_w[0]-0.2, 0.36, size=11, color=txt_col, bold=highlight)
+    std_col = RED if std == "No" else (GREEN if std == "Yes" else LGREY)
+    txbox(sl, std,  col_x[1]+0.1, y+0.04, col_w[1]-0.2, 0.36, size=11, color=std_col, bold=False, align=PP_ALIGN.CENTER)
+    jbpf_col = GREEN if jbpf.startswith("Yes") else (RED if jbpf == "No" else LGREY)
+    txbox(sl, jbpf, col_x[2]+0.1, y+0.04, col_w[2]-0.2, 0.36, size=11, color=jbpf_col, bold=False)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # SLIDE 9 — THROUGHPUT GAP EXPLAINED
@@ -426,40 +597,41 @@ img(sl, FIG + "/fig_cpu_overhead.png", 0.3, 1.1, 12.7, 5.7)
 # ══════════════════════════════════════════════════════════════════════════════
 sl = new_slide()
 bg(sl)
-slide_header(sl, "Anomaly Datasets — 35 Scenarios, 5 621 Labelled Samples",
-             "Week 9 deliverable: AI-ready CSV + HDF5 with microsecond timestamps")
+slide_header(sl, "Anomaly Datasets — 5 621 Labelled Samples, 19 Features",
+             "35 recorded scenarios covering 4 failure types — ready for AI/ML training")
 
-img(sl, FIG + "/fig_dataset_overview.png", 0.3, 1.1, 7.5, 3.8)
+# --- 4 class boxes across the top half ----------------------------------
+class_data = [
+    (GREEN,  "Class 0 — Normal",
+             "The network running as intended.\nClean radio, no load stress.\n\n2 063 samples\n(baseline reference)"),
+    (ORANGE, "Class 1 — Scheduler Fault",
+             "We lowered the priority of the gNB\nreal-time thread in the OS. The radio\nstarts missing its 1 ms deadlines.\n\n462 samples\n(software/OS fault)"),
+    (RED,    "Class 2 — Traffic Flood",
+             "We blasted the UE with massive\nUDP / TCP traffic — like a denial-of-\nservice attack on the radio link.\n\n936 samples\n(overload stress)"),
+    (PURPLE, "Class 3 — Channel Degradation",
+             "We injected RF impairments via the\nchannel broker: fading, noise, burst\ndrops — simulating poor radio coverage.\n\n2 160 samples\n(radio environment stress)"),
+]
+for i, (col, title, body) in enumerate(class_data):
+    x = 0.3 + i * 3.27
+    rect(sl, x, 1.15, 3.1, 4.0, RGBColor(0x0d, 0x0d, 0x25), line_color=col)
+    rect(sl, x, 1.15, 3.1, 0.42, col)
+    txbox(sl, title, x+0.08, 1.18, 3.0, 0.38, size=12, bold=True, color=WHITE)
+    txbox(sl, body, x+0.1, 1.62, 2.95, 3.4, size=11, color=LGREY)
 
-# Right: key numbers
-txbox_multi(sl, [
-    (False, "4 anomaly classes:"),
-    (True,  "normal (0) — 2 063 samples — clean baseline"),
-    (True,  "scheduler_fault (1) — 462 samples — RT thread demotion"),
-    (True,  "traffic_flood (2) — 936 samples — UDP/TCP flood"),
-    (True,  "channel_degradation (3) — 2 160 samples — RF impairments"),
-    (False, ""),
-    (False, "19 features per 1-second window:"),
-    (True,  "7 × hook_p99_us (per steady-state hook)"),
-    (True,  "HARQ: mcs_avg, mcs_min, cons_retx, fail_rate"),
-    (True,  "CRC: sinr_avg, harq_fail, success_rate"),
-    (True,  "BSR: bsr_kb"),
-    (True,  "RLC: throughput_kb, lat_avg_us, lat_max_us"),
-], 7.9, 1.2, 5.2, 3.6, size=12)
-
-# Bottom bar
-txbox_multi(sl, [
-    (False, "Scenario-based train/test split  ·  train: 4 487 rows  ·  test: 1 134 rows  ·  Feature scaler saved"),
-], 0.3, 5.1, 12.7, 0.5, size=12)
+# --- Bottom: features + numbers -----------------------------------------
+rect(sl, 0.3, 5.3, 12.7, 0.5, RGBColor(0x10, 0x10, 0x30), line_color=BLUE)
+txbox(sl, "19 features per 1-second window  ·  7 hook latencies (p99 µs)  ·  "
+          "HARQ (MCS, retx, fail rate)  ·  CRC (SINR, success rate)  ·  "
+          "BSR (buffer)  ·  RLC (throughput, latency)",
+      0.4, 5.35, 12.5, 0.38, size=11, color=LGREY, align=PP_ALIGN.CENTER)
 
 # Key finding box
-rect(sl, 0.3, 5.7, 12.7, 1.05, RGBColor(0x1a, 0x0a, 0x0a),
-     "", line_color=RED)
+rect(sl, 0.3, 5.9, 12.7, 1.05, RGBColor(0x1a, 0x0a, 0x0a), "", line_color=RED)
 txbox(sl, "Key finding: 14 of 23 stress scenarios produce signatures invisible to standard metrics.",
-      0.4, 5.75, 12.5, 0.45, size=14, bold=True, color=YELLOW)
+      0.4, 5.95, 12.5, 0.42, size=14, bold=True, color=YELLOW)
 txbox(sl, "hook_p99_us_fapi_ul spikes to >7 000 µs (7× the 1 ms slot budget) during scheduler demotion "
           "while SINR/MCS remain normal — impossible to detect without hook latency.",
-      0.4, 6.2, 12.5, 0.45, size=12, color=WHITE)
+      0.4, 6.38, 12.5, 0.42, size=12, color=WHITE)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # SLIDE 12 — THE KEY RESULT: HOOK LATENCY SIGNATURE
@@ -469,7 +641,7 @@ bg(sl)
 slide_header(sl, "The Core Result — Hook Latency Identifies Infrastructure Faults",
              "A metric that exists nowhere in standard 5G monitoring")
 
-img(sl, PS + "/01_hook_latency_comparison.png", 0.3, 1.1, 8.5, 5.2)
+img(sl, FIG + "/screenshot_grafana2.png", 0.3, 1.1, 8.5, 5.2)
 
 txbox_multi(sl, [
     (False, "What happened:"),
@@ -496,7 +668,7 @@ bg(sl)
 slide_header(sl, "In-Network Pre-Processing — Week 8 Extension",
              "Computing statistics inside the eBPF program — no userspace required")
 
-img(sl, FIG + "/fig_custom_codelet.png", 0.3, 1.1, 8.0, 5.5)
+img(sl, FIG + "/screenshot_grafana1.png", 0.3, 1.1, 8.0, 5.5)
 
 txbox_multi(sl, [
     (False, "Custom SINR codelet (C code):"),
@@ -570,7 +742,7 @@ slide_header(sl, "Summary of Contributions")
 
 contributions = [
     (BLUE,   "1. Full 5G NR Telemetry Pipeline",
-             "22 jBPF hook points · 17 schemas · 1 ms granularity · 45-panel Grafana dashboard"),
+             "22 jBPF hook points · 17 schemas · 1 ms granularity · 36-panel Grafana dashboard"),
     (GOLD,   "2. ZMQ Channel Broker",
              "GRC Python broker: AWGN + Rician/Rayleigh + EPA/EVA/ETU + interference + time-varying scenarios"),
     (PURPLE, "3. Baremetal Installation",

@@ -82,7 +82,7 @@ S("Project Overview", """
   <td>2. Telemetry</td><td>C-based jBPF codelets hooked into the RAN stack</td>
 </tr>
 <tr style="background:#22223a">
-  <td>3. Visualisation</td><td>45-panel real-time Grafana dashboard</td>
+  <td>3. Visualisation</td><td>36-panel real-time Grafana dashboard</td>
 </tr>
 <tr style="background:#2a2a42">
   <td>4. Extension</td><td>In-network pre-processing + AI-ready datasets</td>
@@ -205,7 +205,7 @@ S(f"Phase III — Visualisation {tag('Week 6','#2d6a2d')}", f"""
 {done("Python subscriber listening to jBPF output")}
 {done("Live time-series plots with Matplotlib")}
 {done("InfluxDB 1.x integration (srsran_telemetry db)")}
-{done("45-panel Grafana dashboard")}
+{done("36-panel Grafana dashboard")}
 <br>
 <b>Dashboard panels include:</b>
 <ul style="margin-top:0.2em">
@@ -362,7 +362,7 @@ S("Summary of Contributions", """
 <ol style="font-size:0.8em;text-align:left;max-width:88%;margin:auto">
   <li style="margin-bottom:0.45em">
     <b>Full 5G NR telemetry pipeline</b> — 22 jBPF hook points across MAC/FAPI/RLC/PDCP/Control,
-    producing 17 telemetry schemas at 1 ms granularity, with 45-panel Grafana dashboard
+    producing 17 telemetry schemas at 1 ms granularity, with 36-panel Grafana dashboard
   </li>
   <li style="margin-bottom:0.45em">
     <b>ZMQ channel broker</b> — GRC Python broker injecting AWGN, Rician/Rayleigh fading,
