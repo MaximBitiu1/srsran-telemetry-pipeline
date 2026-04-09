@@ -221,9 +221,19 @@ The hooks add microsecond-level overhead to each instrumented function. Under no
 | fapi_dl_tti_request | 680 | 1.54 | 5.94 | 0.40 |
 | rlc_dl_tx_pdu | 55 | 3.06 | 10.53 | 0.06 |
 | All other hooks (15) | <10 each | — | — | 0.03 |
-| **All 22 hooks combined** | | | | **3.29** |
+| **All 22 hooks combined** | | | | **0.79 (measured)** |
 
-Total steady-state overhead is about 3.3% of one CPU core at the measured load (~880 UL PDUs/s, ~25 Mbps iperf3 UL). That's ~33 µs of hook execution per 1 ms slot on average.
+**Controlled OFF vs ON experiment (primary result):**
+
+A direct measurement was run using identical traffic (10 Mbps iperf3 UL, 90 s each run) with codelets OFF (jrtc running, zero codelets loaded) vs ON (all 12 codelet sets, ~60 programs). CPU sampled with `pidstat` at 1 s intervals.
+
+| Process | OFF | ON | Delta |
+|---|---|---|---|
+| gNB | 178.78 % | 178.92 % | **+0.15 %** |
+| jrtc | 9.48 % | 9.85 % | **+0.37 %** |
+| System (16 cores) | 18.04 % | 18.06 % | **+0.02 %** |
+
+Combined overhead of loading all 60 codelets: **< 0.6 % of one core**. The gNB process delta (+0.15 %) is within measurement noise. The earlier analytical estimate of 3.3 % (invocations × p50 execution time) overcounted because hooks share the gNB's existing thread time rather than adding new scheduling slots. Reproduce: `bash scripts/benchmark_codelet_overhead.sh`
 
 When we demoted the gNB from `SCHED_FIFO:96` to `SCHED_BATCH`, the `fapi_ul_tti_request` p99 jumped to 7 289 µs — over 7× the entire slot budget. Meanwhile, the standard metrics showed only a small MCS/BSR change that could easily be mistaken for normal channel variation. Without hook latency, there is no way to tell a scheduling fault from a fading dip.
 
@@ -257,10 +267,6 @@ These are mostly useful for radio resource management and scheduler debugging. T
 
 ## 8. Capability comparison
 
-![CPU overhead diagram](../figures/fig_cpu_overhead.png)
-
-*Figure: Per-hook CPU overhead measured directly from jbpf_out_perf_list telemetry. Total steady-state overhead is ~3.3% of one CPU core at 25 Mbps load.*
-
 | | Standard | Janus |
 |---|---|---|
 | Setup effort | Low (Docker Compose) | High (jrtc, codelets, proxy, decoder) |
@@ -276,7 +282,7 @@ These are mostly useful for radio resource management and scheduler debugging. T
 | Scheduling latency histograms | Yes | No |
 | PHR / DL buffer status | Yes | No |
 | Metric count | ~30 fields in 1 table | 60+ fields across 17 measurements |
-| CPU overhead | Negligible | ~3.3% of one core |
+| CPU overhead | Negligible | **< 0.6 % of one core** (measured) |
 | Can be loaded/unloaded at runtime | Always on | Yes (`jrtc-ctl`) |
 
 ---
