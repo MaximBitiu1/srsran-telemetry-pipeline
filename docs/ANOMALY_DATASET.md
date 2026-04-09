@@ -299,6 +299,34 @@ bash scripts/collect_channel_realistic.sh \
 
 All CSV files share: `scenario_id`, `label`, `category`, `timestamp_utc`, `timestamp_unix`, `relative_s`.
 
+### Cleaned feature matrices
+
+Running `scripts/clean_datasets.py` merges all per-schema CSVs into two ML-ready files:
+
+```
+datasets/stress_anomaly/stress_features.csv     — 2892 rows × 49 columns, 23 scenarios
+datasets/channel/channel_features.csv           — 2729 rows × 49 columns, 12 scenarios
+```
+
+```bash
+python3 scripts/clean_datasets.py
+```
+
+Each file has one row per `(scenario_id, relative_s)` second with the following feature groups:
+
+| Group | Columns | Source |
+|---|---|---|
+| Labels | `scenario_id`, `label`, `category`, `relative_s` | all schemas |
+| BSR | `bsr_bytes`, `bsr_cnt`, `bsr_kb` | bsr_stats |
+| SINR / HARQ | `crc_sinr_avg`, `crc_sinr_min`, `crc_sinr_max`, `crc_harq_fail`, `crc_tx`, `crc_succ_tx`, `harq_fail_rate`, `crc_success_rate` | crc_stats |
+| MCS / retx | `harq_mcs_avg`, `harq_mcs_min`, `harq_mcs_max`, `harq_cons_retx`, `harq_slots_sampled` | harq_stats (both streams aggregated) |
+| Hook latency | `hook_{p99,max,num}_us_<hook>` × 7 hooks | jbpf_out_perf_list |
+| RLC UL | `rlc_bytes_per_s`, `rlc_pdu_bytes_per_s`, `rlc_lat_avg_us`, `rlc_lat_max_us`, `rlc_throughput_kb` | rlc_ul_stats (data bearer only) |
+
+The 7 periodic hooks included: `fapi_ul_tti_request`, `fapi_dl_tti_request`, `rlc_ul_rx_pdu`, `rlc_ul_sdu_delivered`, `rlc_dl_tx_pdu`, `pdcp_ul_deliver_sdu`, `pdcp_ul_rx_data_pdu`.
+
+RLC byte counters are differenced within each scenario (cumulative → per-second rate). The channel dataset has ~80 % NaN for non-hook columns because 5 of 12 scenarios are hook-only (UE never attached); `hook_p99_us_fapi_ul` and `hook_p99_us_fapi_dl` remain populated for all 12.
+
 ### Known data quirks
 
 | Schema | Field | Issue | Handling |
