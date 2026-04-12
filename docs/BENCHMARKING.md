@@ -141,56 +141,62 @@ The saving scales linearly with the number of UEs and the reporting window lengt
 
 ## 4. Per-Metric Reporting Latency and Overhead
 
-This section compares the end-to-end reporting latency of the jBPF pipeline against the standard srsRAN + Telegraf pipeline, and provides per-hook execution cost for the subset of metrics where direct measurement is available.
+This section provides empirical measurements of how much earlier the jBPF pipeline delivers each overlapping metric compared to the standard srsRAN/Telegraf pipeline, and what per-hook CPU cost each measurement carries. All numbers are derived from a 41-minute session (10:20–11:01 UTC). The analysis script is `scripts/measure_pipeline_latency.py`.
 
-### Pipeline Architecture and Expected Latency
+### Measurement Method
 
-The two pipelines differ in how events travel from the gNB to InfluxDB. In the jBPF pipeline, an eBPF hook fires synchronously inside the gNB function call, writes into a BPF map (shared memory), and a collector codelet aggregates events over a configurable window (1 s for MAC stats). At the window boundary, the collector serializes the map to a Protobuf message and sends it via UDP to the local proxy, which writes to InfluxDB over loopback. Because an event occurring at a random point within the window waits on average half the window before the report fires, the average event age at write time is approximately 0.5 s, with an additional 2 ms of serialization and network overhead.
+Three independent measurements were used for each metric:
 
-In the standard pipeline, the gNB MAC layer accumulates stats over a 1 s internal window. Telegraf then polls the gNB WebSocket at a separate 1 s interval. An event must wait for the internal window to close (average 0.5 s) and then for Telegraf to poll (average 0.5 s), yielding approximately 1 s of average pipeline latency. The jBPF pipeline therefore halves the average reporting delay by eliminating the asynchronous poll step.
+**Reporting interval** — the distribution of consecutive inter-sample gaps in each pipeline's InfluxDB time series. Shorter intervals mean fresher data.
 
-### Measured Reporting Intervals
+**Cross-correlation lag** — both series are interpolated onto a 0.25 s grid and the full cross-correlation is computed. The lag at the peak gives the time by which jBPF *leads* standard for the same underlying signal. A positive value means jBPF delivers the measurement earlier. This captures both the per-sample timing advantage and the update-frequency difference between the pipelines.
 
-Reporting intervals were measured from consecutive InfluxDB timestamps during a 41-minute session (10:20 to 11:01 UTC).
+**Per-hook CPU overhead** — for hooks instrumented by the perf codelet (`jbpf_perf` measurement), CPU cost is estimated as invocations/s × median execution time (p50).
 
-| Source | Metrics | Mean interval (s) | Std (s) | Min (s) | Max (s) |
+### Reporting Interval Comparison
+
+| Metric | jBPF mean (s) | jBPF p95 (s) | Std mean (s) | Std p95 (s) | jBPF leads by |
+|---|---:|---:|---:|---:|---:|
+| SINR / SNR | 1.074 | 2.00 | 1.634 | 1.83 | **+0.75 s** |
+| UL BLER | 1.074 | 2.00 | 1.634 | 1.83 | **+0.75 s** |
+| CQI | 1.073 | 2.00 | 1.634 | 1.83 | n/a (constant) |
+| Timing Advance | 1.073 | 2.00 | 1.634 | 1.83 | **+0.75 s** |
+| Rank Indicator | 1.073 | 2.00 | 1.634 | 1.83 | n/a (constant) |
+| BSR | 1.074 | 2.00 | 1.634 | 1.83 | **+0.75 s** |
+| DL MCS | 1.074 | 2.00 | 1.634 | 1.83 | **+1.00 s** |
+| UL MCS | 1.074 | 2.00 | 1.634 | 1.83 | **+0.75 s** |
+| DL Throughput (iperf3) | 0.981 | 0.01 | 1.634 | 1.83 | — (different sources) |
+| UL Throughput (iperf3) | 0.962 | 0.01 | 1.634 | 1.83 | — (different sources) |
+
+The jBPF MAC and FAPI hooks aggregate over a 1 s window aligned to the system clock and write to InfluxDB immediately when the window closes, giving a mean interval of 1.074 s. The standard pipeline uses a 1 s internal gNB window followed by an asynchronous Telegraf poll: because the poll is not phase-locked to the gNB window, Telegraf misses approximately one in three update cycles, producing a mean interval of 1.634 s. jBPF therefore delivers MAC and FAPI metrics roughly **36% more frequently**.
+
+The cross-correlation lag of +0.75 to +1.00 s (jBPF leads) reflects both the timestamp offset between the two write events and the compounding effect of the lower reporting rate — values in the standard pipeline go stale for longer between updates. Throughput comparison is not meaningful here because the two pipelines measure different things: jBPF reads application-layer iperf3 output (5 Mbps DL / 10 Mbps UL) while the standard pipeline reads the gNB internal scheduler rate (9 Mbps DL / 17 Mbps UL), so no valid time-alignment is possible.
+
+### Per-Hook CPU Overhead
+
+The perf codelet measures execution time for every hook invocation. All reported times are in microseconds (nanosecond raw values divided by 1000). MAC scheduler hooks (SINR, CQI, TA, RI, BSR, UL BLER) are not individually instrumented by the perf codelet; their aggregate cost is bounded by the OFF/ON experiment in Section 1 (<0.6% of one core for all 60 codelets combined).
+
+| Hook | Metric(s) | Inv/s | p50 (µs) | p99 (µs) | CPU (% of 1 core) |
 |---|---|---:|---:|---:|---:|
-| jBPF MAC layer | SINR, UL BLER, CQI, TA, RI, BSR | 1.074 | 0.262 | 1.00 | 2.00 |
-| jBPF FAPI layer | DL MCS, UL MCS | 1.074 | 0.270 | 1.00 | 3.00 |
-| jBPF app layer | DL/UL Throughput (iperf3) | ~0.003 | — | — | — |
-| Standard (Telegraf) | All UE table metrics | 1.680 | 0.141 | 1.22 | 1.99 |
+| fapi_dl_tti_request | DL MCS | 601 | 1.536 | 6.144 | 0.092 |
+| pdcp_dl_new_sdu | — (data path) | 876 | 0.768 | 6.144 | 0.067 |
+| rlc_dl_new_sdu | — (data path) | 876 | 0.768 | 6.144 | 0.067 |
+| fapi_ul_tti_request | UL MCS | 601 | 0.768 | 3.072 | 0.046 |
+| pdcp_dl_tx_data_pdu | — (data path) | 876 | 0.384 | 3.072 | 0.034 |
+| rlc_dl_sdu_send_completed | — (data path) | 876 | 0.384 | 3.072 | 0.034 |
+| rlc_dl_sdu_send_started | — (data path) | 876 | 0.384 | 3.072 | 0.034 |
+| rlc_ul_rx_pdu | — (data path) | 1180 | 0.192 | 3.072 | 0.023 |
+| rlc_dl_tx_pdu | — (data path) | 1111 | 0.192 | 3.072 | 0.021 |
+| pdcp_ul_deliver_sdu | — (data path) | 876 | 0.192 | 3.072 | 0.017 |
+| pdcp_ul_rx_data_pdu | — (data path) | 876 | 0.192 | 6.144 | 0.017 |
+| rlc_ul_sdu_delivered | — (data path) | 876 | 0.192 | 6.144 | 0.017 |
+| rlc_dl_sdu_delivered | — (data path) | 876 | 0.096 | 3.072 | 0.008 |
+| rlc_dl_am_tx_pdu_retx_count | — (retx) | 2 | 0.096 | 1.536 | <0.001 |
+| **Total (14 perf-instrumented hooks)** | | | | | **0.477** |
 
-The jBPF MAC and FAPI metrics arrive with a mean interval close to the configured 1 s aggregation window. The standard pipeline reports at a mean interval of 1.68 s due to the Telegraf poll architecture: although the gNB updates its internal stats every second, Telegraf does not always capture every update cycle, causing occasional missed intervals. Throughput metrics from iperf3 arrive near-continuously (approximately every 3 ms) because they are read directly from the iperf3 process output rather than from a BPF aggregation window.
+The FAPI hooks fire on every scheduled TTI (not every 1 ms slot) because the scheduler only allocates resources when there is data to send. At 10 MHz bandwidth with 5 Mbps DL load this amounts to approximately 601 allocations per second. Each DL MCS invocation costs 1.536 µs at the median (0.092% of one core); each UL MCS invocation costs 0.768 µs (0.046%). RLC and PDCP data-path hooks fire at UE traffic rate (~876 inv/s at 10 Mbps) and each costs 0.096–0.768 µs.
 
-### Per-Hook Execution Cost for Overlapping Metrics
-
-The perf codelet instruments the FAPI hooks that generate DL MCS and UL MCS. The MAC scheduler hooks (responsible for SINR, CQI, TA, RI, BSR, and UL BLER) are not individually instrumented; their aggregate contribution is included in the less-than-0.6% system overhead from Section 1. The table below reports measurements from 795,832 invocations over a 1,290 s session.
-
-| Hook | Metric produced | p50 (us) | p90 (us) | p99 (us) | Max (us) | Inv/s | CPU (% of 1 core) |
-|---|---|---:|---:|---:|---:|---:|---:|
-| fapi_dl_tti_request | DL MCS | 1.519 | 2.615 | 5.587 | 12.37 | ~617 | 0.094 |
-| fapi_ul_tti_request | UL MCS | 0.975 | 1.966 | 4.562 | 11.34 | ~617 | 0.060 |
-
-The FAPI hooks fire on every DL or UL TTI request rather than on every 1 ms slot, because the scheduler only allocates when there is data to send. At the 10 MHz bandwidth and 5 Mbps DL load used in this experiment, approximately 617 requests per second were generated. Each invocation adds 1.5 us (DL) or 1.0 us (UL) at the median, costing 0.094% and 0.060% of one CPU core respectively.
-
-### Metric-to-Hook Mapping
-
-The following table maps each telemetry metric to its jBPF source and indicates whether per-hook performance data is available.
-
-| Metric | jBPF measurement | Generating hook | Perf instrumented |
-|---|---|---|---|
-| SINR / SNR | mac_crc_stats | mac_sched_crc_indication | No |
-| UL BLER | mac_crc_stats | mac_sched_crc_indication | No |
-| CQI | mac_uci_stats | mac_sched_uci_indication | No |
-| Timing Advance | mac_uci_stats | mac_sched_uci_indication | No |
-| Rank Indicator | mac_uci_stats | mac_sched_uci_indication | No |
-| BSR | mac_bsr_stats | mac_sched_ul_bsr | No |
-| DL MCS | fapi_dl_config | fapi_dl_tti_request | Yes |
-| UL MCS | fapi_ul_config | fapi_ul_tti_request | Yes |
-| DL Throughput | ue_dl_throughput | iperf3 stdout reader | No (not a hook) |
-| UL Throughput | ue_ul_throughput | iperf3 stdout reader | No (not a hook) |
-
-For the six MAC-layer metrics without individual perf data, the combined overhead of all 60 codelets (including MAC, FAPI, RLC, PDCP, RRC, and NGAP hooks) remains below 0.6% of one core as established in Section 1. No individual metric dominates that budget.
+The standard pipeline has no equivalent per-metric overhead: the gNB computes its internal stats regardless of whether Telegraf is running, and Telegraf's single HTTP poll every ~1.634 s covers all UE metrics simultaneously with no per-metric cost attribution.
 
 ---
 
@@ -206,3 +212,8 @@ For the six MAC-layer metrics without individual perf data, the combined overhea
 | Bandwidth saving (in-hook analytics) | 99.7% (308× reduction) |
 | Raw data rate without in-hook processing | ~16,000 bytes/s per UE |
 | In-hook analytics data rate | ~52 bytes/s per UE |
+| jBPF reporting interval (MAC/FAPI) | 1.074 s mean (vs 1.634 s standard) |
+| jBPF data freshness lead over standard | +0.75 s (MAC metrics), +1.00 s (DL MCS) |
+| DL MCS hook cost (fapi_dl_tti_request) | 0.092% of 1 core, 1.536 µs median |
+| UL MCS hook cost (fapi_ul_tti_request) | 0.046% of 1 core, 0.768 µs median |
+| Total perf-instrumented hook overhead | 0.477% of 1 core (14 hooks) |
