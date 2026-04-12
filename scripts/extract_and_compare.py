@@ -169,6 +169,8 @@ def extract_jbpf():
     save_csv(rows, "jbpf_bsr_stats.csv")
 
     # FAPI DL config (PRBs, MCS, TBS)
+    # rnti is an InfluxDB tag (string) — numeric comparison doesn't work in InfluxQL.
+    # In a single-UE setup there is only one RNTI anyway, so no filter needed.
     rows = query_influx1(
         "SELECT * FROM fapi_dl_config ORDER BY time ASC"
     )
@@ -239,10 +241,10 @@ def build_aligned_series(jbpf, standard):
     std_times = np.array([to_epoch(r["time"]) for r in standard])
 
     def nearest_std(t, field):
-        """Find nearest standard row within ±3s."""
+        """Find nearest standard row within ±1s."""
         diffs = np.abs(std_times - t)
         idx = np.argmin(diffs)
-        if diffs[idx] <= 3.0:
+        if diffs[idx] <= 1.0:
             return standard[idx].get(field)
         return None
 
@@ -346,7 +348,10 @@ def build_aligned_series(jbpf, standard):
         aligned["ul_brate"] = series
         save_csv(series, "aligned_ul_bitrate.csv")
 
-    # 7. BSR
+    # 7. BSR — use avg_bytes_per_report (comparable to standard's instantaneous BSR)
+    # Note: jBPF total_bytes is the cumulative sum across all BSR MAC CEs in the window
+    # (~60x larger than std). avg_bytes_per_report is the per-CE average, which is
+    # semantically closer to the standard's latest-MAC-CE snapshot.
     bsr = jbpf.get("bsr", [])
     if bsr:
         series = []
@@ -356,22 +361,27 @@ def build_aligned_series(jbpf, standard):
             series.append({
                 "time": r["time"],
                 "epoch": t,
-                "jbpf_bsr_bytes": r.get("total_bytes"),
+                "jbpf_bsr_avg_bytes": r.get("avg_bytes_per_report"),
                 "std_bsr": std_bsr,
             })
         aligned["bsr"] = series
         save_csv(series, "aligned_bsr.csv")
 
-    # 8. Timing Advance
+    # 8. Timing Advance — convert jBPF raw N_TA index to nanoseconds
+    # NR formula: TA_ns = N_TA × T_c × 1e9, where T_c = 1/(480000 × 4096) s
+    # This converts N_TA ≈ 1022 → ≈ 520 ns, matching the standard's ta_ns field.
+    _TC_NS = 1e9 / (480000 * 4096)  # ≈ 0.508626 ns per T_c unit
     if uci:
         series = []
         for r in uci:
             t = to_epoch(r["time"])
             std_ta = nearest_std(t, "ta_ns")
+            raw_ta = r.get("avg_timing_advance")
+            jbpf_ta_ns = float(raw_ta) * _TC_NS if raw_ta is not None else None
             series.append({
                 "time": r["time"],
                 "epoch": t,
-                "jbpf_ta": r.get("avg_timing_advance"),
+                "jbpf_ta_ns": jbpf_ta_ns,
                 "std_ta_ns": std_ta,
             })
         aligned["ta"] = series
@@ -501,19 +511,19 @@ def make_plots(aligned, jbpf, standard):
                   "07_bler_comparison.png",
                   "jBPF (1 - TX success)", "Standard (nok/total)")
 
-    # 8. BSR
+    # 8. BSR — avg bytes per report (comparable to standard instantaneous BSR)
     if "bsr" in aligned:
-        plot_dual(aligned["bsr"], "jbpf_bsr_bytes", "std_bsr",
+        plot_dual(aligned["bsr"], "jbpf_bsr_avg_bytes", "std_bsr",
                   "Buffer Status Reports Comparison", "Bytes",
                   "08_bsr_comparison.png",
-                  "jBPF (BSR total bytes)", "Standard BSR")
+                  "jBPF (avg bytes/report)", "Standard BSR (instantaneous)")
 
-    # 9. Timing Advance
+    # 9. Timing Advance — both in nanoseconds after N_TA × T_c conversion
     if "ta" in aligned:
-        plot_dual(aligned["ta"], "jbpf_ta", "std_ta_ns",
-                  "Timing Advance Comparison", "ns / value",
+        plot_dual(aligned["ta"], "jbpf_ta_ns", "std_ta_ns",
+                  "Timing Advance Comparison", "Timing Advance (ns)",
                   "09_ta_comparison.png",
-                  "jBPF (UCI TA)", "Standard (ta_ns)")
+                  "jBPF (N_TA × T_c, ns)", "Standard (ta_ns)")
 
     # ── jBPF-exclusive metrics ────────────────────────────────────
 
@@ -600,11 +610,11 @@ def plot_correlations(aligned):
         return
 
     pairs = [
-        ("sinr_snr", "jbpf_sinr", "std_snr", "SINR (jBPF) vs SNR (Std)", "dB"),
-        ("cqi", "jbpf_cqi", "std_cqi", "CQI", "Index"),
-        ("dl_mcs", "jbpf_dl_mcs", "std_dl_mcs", "DL MCS", "Index"),
-        ("dl_brate", "jbpf_dl_mbps", "std_dl_mbps", "DL Throughput", "Mbps"),
-        ("ul_brate", "jbpf_ul_mbps", "std_ul_mbps", "UL Throughput", "Mbps"),
+        ("sinr_snr", "jbpf_sinr",        "std_snr",    "SINR (jBPF) vs SNR (Std)", "dB"),
+        ("cqi",      "jbpf_cqi",          "std_cqi",    "CQI",                       "Index"),
+        ("dl_mcs",   "jbpf_dl_mcs",       "std_dl_mcs", "DL MCS",                    "Index"),
+        ("bsr",      "jbpf_bsr_avg_bytes","std_bsr",    "BSR (avg/report)",          "Bytes"),
+        ("ta",       "jbpf_ta_ns",        "std_ta_ns",  "Timing Advance",            "ns"),
     ]
 
     fig, axes = plt.subplots(1, len(pairs), figsize=(20, 4))
@@ -652,6 +662,8 @@ def compute_statistics(aligned):
         "DL Mbps":         ("dl_brate", "jbpf_dl_mbps", "std_dl_mbps"),
         "UL Mbps":         ("ul_brate", "jbpf_ul_mbps", "std_ul_mbps"),
         "BLER %":          ("bler", "jbpf_bler_pct", "std_bler_pct"),
+        "BSR (bytes)":     ("bsr", "jbpf_bsr_avg_bytes", "std_bsr"),
+        "TA (ns)":         ("ta", "jbpf_ta_ns", "std_ta_ns"),
     }
 
     for name, (key, jk, sk) in metric_defs.items():
