@@ -290,7 +290,7 @@ Instantaneous SINR minimum and maximum per 2 s window from `fapi_crc_stats` (con
 
 ---
 
-## 7. Standard-exclusive metrics
+## 7. srsRAN Standard-exclusive metrics
 
 The standard WebSocket interface exposes five measurement tables. Everything below is collected by Telegraf and stored in InfluxDB 3 but has no equivalent Janus codelet in the current deployment.
 
