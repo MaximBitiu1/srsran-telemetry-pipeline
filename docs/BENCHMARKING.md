@@ -126,3 +126,13 @@ t_crc_stats_custom {
   sinr_sliding_avg, sinr_sliding_cnt   // 16-sample window
 }
 ```
+
+---
+
+## 5. Conclusion
+
+The standard srsRAN pipeline is the cheaper option in pure compute terms. The gNB computes all metrics internally regardless of telemetry, so the entire cost of the standard approach is Telegraf plus a thin Python WebSocket adapter — measured at **~0.13% of one core** idle, with no cost attributable to any individual metric. jBPF adds **+0.51% of one core** in total (+0.14% to the gNB process from hook execution, +0.37% to the jrtc proxy), a net overhead of roughly **+0.38 percentage points** above the standard pipeline.
+
+The most compute-intensive jBPF metrics are those produced by high-frequency data-plane hooks. **DL MCS** (`fapi_dl_tti_request`, 601 inv/s, 1.536 µs median) and **UL MCS** (`fapi_ul_tti_request`, 601 inv/s, 0.768 µs median) are the only individually measured hooks with a non-trivial cost — 0.092% and 0.046% of one core respectively. The downlink data-path hooks (`pdcp_dl_new_sdu`, `rlc_dl_new_sdu`) are the next most active at ~876 inv/s each, costing 0.067% per hook. The MAC-layer hooks that produce SINR, CQI, Timing Advance, RI, BSR, and UL BLER are not individually instrumented, but the entire set of 60 codelets combined stays within the 0.52% bound measured in the OFF/ON experiment.
+
+Despite costing more, jBPF delivers the same metrics **0.75–1.00 s earlier** and at a **36% higher update rate** than Telegraf. It also captures signals — hook execution latency spikes (1,214× during scheduler faults), per-slot SINR range, and HARQ retransmissions — that the WebSocket interface does not expose at all. The +0.38% overhead is therefore the cost of richer, lower-latency telemetry, not a replacement for a cheaper alternative doing the same job.
