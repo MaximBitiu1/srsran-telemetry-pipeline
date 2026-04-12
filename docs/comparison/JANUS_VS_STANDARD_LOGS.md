@@ -16,14 +16,17 @@ Even when both channels measure the "same" metric, architectural differences mea
 
 | Layer | Janus (jBPF) hooks | Standard metrics |
 |-------|-------------------|-----------------|
-| Application | `ue_dl/ul_throughput` (iperf3 output) | — |
-| GTP-U / NGAP | `ngap_events` (procedure timing) | — |
-| PDCP | `pdcp_dl/ul_stats` (per-bearer bytes) | — |
+| Application | `ue_dl/ul_throughput` (iperf3 bitrate, jitter, loss) | — |
+| CU Control Plane | `ngap_events` (procedure timing) | `cu-cp`: handover prep/exec counts, NGAP instance state |
+| PDCP | `pdcp_dl/ul_stats` (per-bearer bytes, retx) | — |
 | RLC | `rlc_dl/ul_stats` (SDU latency, retx) | — |
-| MAC Scheduler | `mac_crc_stats`, `mac_harq_stats`, `mac_bsr_stats`, `mac_uci_stats` | `ue.pusch_snr_db`, `ue.dl/ul_mcs`, `ue.cqi`, `ue.bsr`, `ue.dl_ri/ul_ri` |
-| FAPI (PHY-MAC) | `fapi_dl/ul_config`, `fapi_crc_stats` | — |
+| MAC Scheduler (per-UE) | `mac_crc_stats` (SINR, CRC pass/fail), `mac_harq_stats` (MCS, retx, TBS), `mac_bsr_stats` (BSR), `mac_uci_stats` (CQI, RI, TA, SR) | `ue`: `pusch_snr_db`, `pucch_snr_db`, `pusch_rsrp_db`, `dl_mcs`, `ul_mcs`, `cqi`, `dl_ri`, `ul_ri`, `bsr`, `dl_bs`, `ta_ns`, `pucch_ta_ns`, `pusch_ta_ns`, `dl_brate`, `ul_brate`, `dl_nof_ok/nok`, `ul_nof_ok/nok`, `avg_crc_delay`, `avg_pucch/pusch_harq_delay`, invalid UCI counters |
+| MAC Scheduler (cell-level) | — | `cell`: scheduling latency (avg/max/histogram), `late_dl/ul_harqs`, `nof_failed_pdcch/uci_allocs`, `msg3_nof_ok/nok`, `avg_prach_delay`, `pucch_tot_rb_usage_avg`, `error_indication_count` |
+| FAPI (PHY-MAC) | `fapi_dl/ul_config` (PRB, MCS, TBS per slot), `fapi_crc_stats` (per-slot SINR range, TA) | — |
+| DU High thread | — | `du`: MAC DL thread latency (avg/min/max/cpu) |
+| UE state events | — | `event_list`: `ue_reconf`, attach/detach with RNTI and slot number |
 
-The key insight is that standard metrics tap only the MAC layer. Janus hooks into multiple layers, so when both measure "throughput" they do so at different points in the protocol stack, and the numbers differ by the header overhead between those layers.
+Standard metrics cover the MAC layer in depth across four measurement tables (`ue`, `cell`, `du`, `cu-cp`) plus an asynchronous event stream. Janus hooks span the full protocol stack from application down to FAPI, reaching layers the standard interface never touches.
 
 ### 2.2 Aggregation window differences
 
