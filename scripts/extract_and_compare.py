@@ -1178,7 +1178,32 @@ def main():
 
     std_ue = standard["ue"]
 
-    # Trim startup transients
+    # Auto-detect session boundary: find the largest gap in the standard ue
+    # time series and use the point after that gap as the session start.
+    # This removes data from previous gNB runs stored in the same database.
+    if not TIME_START and std_ue:
+        times = [to_epoch(r["time"]) for r in std_ue]
+        gaps  = [(times[i+1] - times[i], times[i+1])
+                 for i in range(len(times) - 1)]
+        max_gap, session_start = max(gaps, key=lambda x: x[0])
+        if max_gap > 30:   # only apply if the gap is larger than 30 s
+            print(f"  Detected session gap of {max_gap:.0f} s; "
+                  f"using data from "
+                  f"{datetime.fromtimestamp(session_start, tz=timezone.utc).strftime('%H:%M:%S')} onwards")
+            for table in ("ue", "cell", "du", "events"):
+                if standard.get(table):
+                    standard[table] = [
+                        r for r in standard[table]
+                        if to_epoch(r["time"]) >= session_start
+                    ]
+            for key in list(jbpf.keys()):
+                rows = jbpf[key]
+                if rows and "time" in rows[0]:
+                    jbpf[key] = [r for r in rows
+                                 if to_epoch(r["time"]) >= session_start]
+            std_ue = standard["ue"]
+
+    # Trim startup transients from the beginning of the identified session
     if not TIME_START and args.trim_startup > 0 and std_ue:
         cutoff = to_epoch(std_ue[0]["time"]) + args.trim_startup
         standard["ue"] = [r for r in std_ue if to_epoch(r["time"]) >= cutoff]
