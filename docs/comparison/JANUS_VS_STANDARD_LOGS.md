@@ -41,17 +41,17 @@ The key insight: **Standard metrics tap only the MAC layer.** Janus hooks into m
 
 This explains the systematic differences seen in the data:
 
-- **SINR offset (17.33 vs 17.71 dB):** Janus averages per-CRC-event SINR values. Standard averages the PUSCH decoder's internal estimate over 1 s. The two averagers weight edge-of-slot measurements differently, producing a ~0.4 dB systematic offset. The 2.1% mean difference is consistent across the entire run.
+- **SINR offset (17.37 vs 17.74 dB):** Janus averages per-CRC-event SINR values. Standard averages the PUSCH decoder's internal estimate over 1 s. The two averagers weight edge-of-slot measurements differently, producing a ~0.4 dB systematic offset. The 2.1% mean difference is consistent across the entire run.
 
-- **DL MCS (24.97 vs 24.96):** At this operating point MCS varies dynamically in the adaptive range. Both systems track the same scheduler decisions. The 0.1% mean difference confirms they read the same underlying value.
+- **DL MCS (24.92 vs 24.94):** At this operating point MCS varies dynamically in the adaptive range. Both systems track the same scheduler decisions. The 0.1% mean difference confirms they read the same underlying value.
 
-- **BSR magnitude (23,066 vs 26,342 bytes):** Janus and standard sample the BSR at slightly different moments within the MAC CE reporting cycle. The 12.4% mean difference reflects timing offsets in when each system captures the buffer state. The weak per-sample correlation (r = 0.148) is expected given the bursty nature of buffer reports.
+- **BSR magnitude (25,213 vs 25,753 bytes):** Janus's `avg_bytes_per_report` and the standard's instantaneous BSR snapshot differ by 2.1% in mean. The weak per-sample correlation (r = 0.059) is expected given the bursty nature of buffer status reports and the fact that the two systems sample different moments in the MAC CE reporting cycle.
 
-- **Timing advance:** Janus reports the raw N_TA integer index from the UCI field. Standard reports nanoseconds. Converting via the NR formula (TA_ns = N_TA x T_c, where T_c = 1/(480,000 x 4096) s ~ 0.509 ns) gives ~520.15 ns, matching the standard's ~519.85 ns within **0.05%**. The comparison script applies this conversion so both series are plotted in nanoseconds.
+- **Timing advance:** Janus reports the raw N_TA integer index from the UCI field. Standard reports nanoseconds. Converting via the NR formula (TA_ns = N_TA × T_c, where T_c = 1/(480,000 × 4096) s ≈ 0.509 ns) gives ~518.87 ns, matching the standard's ~519.84 ns within **0.2%**. The comparison script applies this conversion so both series are plotted in nanoseconds.
 
 ### 2.3 BLER: different directions, not a discrepancy
 
-Janus's `mac_crc_stats` reports the **UL CRC failure rate** (11.42%) -- how many uplink transport blocks failed CRC at the gNB receiver. The standard `ue.dl_nof_ok/nok` reports the **DL HARQ error rate** (0.86%) -- how many downlink transmissions needed retransmission as reported by the UE. These measure different directions of the link. At SNR = 18 dB with Rician K = 1 dB, the uplink channel experiences noticeably more errors than the downlink, which is expected given the asymmetric power budget and the fact that UL uses a lower MCS (19 vs 25).
+Janus's `mac_crc_stats` reports the **UL CRC failure rate** (10.82%) -- how many uplink transport blocks failed CRC at the gNB receiver. The standard `ue.dl_nof_ok/nok` reports the **DL HARQ error rate** (0.86%) -- how many downlink transmissions needed retransmission as reported by the UE. These measure different directions of the link. At SNR = 18 dB with Rician K = 1 dB, the uplink channel experiences noticeably more errors than the downlink, which is expected given the asymmetric power budget and the fact that UL uses a lower MCS (19 vs 25).
 
 ---
 
