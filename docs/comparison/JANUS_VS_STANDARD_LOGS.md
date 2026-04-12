@@ -254,21 +254,143 @@ End-to-end round-trip latency via ICMP ping through the full stack (UE -> gNB ->
 
 ## 7. Standard-exclusive metrics
 
-A few metrics are only available through the standard interface:
+The standard WebSocket interface exposes five measurement tables. Everything below is collected by Telegraf and stored in InfluxDB 3 but has no equivalent Janus codelet in the current deployment.
+
+### 7.1 `ue` measurement -- per-UE, 1 Hz
+
+**Radio quality (additional fields beyond the comparison set):**
+
+| Field | Observed value (20-min run) | What it is |
+|---|---|---|
+| `pucch_snr_db` | 15.2 dB mean | SNR on the PUCCH control channel (separate receiver path from PUSCH) |
+| `pusch_rsrp_db` | -99.9 dBm | PUSCH reference signal received power; -99.9 is the srsRAN sentinel for "not measurable" in ZMQ mode |
+| `pucch_ta_ns` | 520.1 ns mean | Timing advance derived from PUCCH reception |
+| `pusch_ta_ns` | 519.6 ns mean | Timing advance derived from PUSCH reception |
+
+Note: the comparison uses `ta_ns` (the combined/primary TA estimate, 519.7 ns mean), which tracks `pusch_ta_ns` closely. `pucch_ta_ns` diverges slightly because PUCCH and PUSCH use different receiver chains.
+
+**MIMO rank indicator:**
+
+| Field | Observed value | What it is |
+|---|---|---|
+| `dl_ri` | 1.0 (constant) | Downlink rank indicator -- number of spatial layers |
+| `ul_ri` | 1.0 (constant) | Uplink rank indicator |
+
+Both constant at 1 because the ZMQ channel is SISO (single antenna). In a MIMO deployment these would vary with channel rank.
+
+**DL buffer status:**
 
 | Field | What it is |
 |---|---|
-| `dl_ri` / `ul_ri` | Rank indicator (MIMO layers) |
-| `dl_bs` | DL buffer status -- pending bytes in scheduler queue |
-| `last_phr` | Last power headroom report from UE |
-| `average_latency` / `max_latency` | Cell-level scheduling latency (us) |
-| `latency_histogram` | Distribution of scheduling latencies |
-| `late_dl_harqs` | Count of late DL HARQ feedback |
-| `nof_failed_pdcch_allocs` | Failed PDCCH allocation attempts |
-| PUCCH SNR | Control channel SNR (separate from PUSCH) |
-| HARQ processing delays | `avg_crc_delay`, `avg_pucch_harq_delay`, `avg_pusch_harq_delay` |
+| `dl_bs` | Pending bytes in the DL scheduler queue for this UE (bytes) |
 
-These are mostly useful for radio resource management and scheduler debugging. They could be added to Janus by writing codelets for the relevant call sites.
+**HARQ processing delays:**
+
+| Field | Observed value | What it is |
+|---|---|---|
+| `avg_crc_delay` | 3.0 slots | Average delay between PUSCH transmission and CRC decode result |
+| `avg_pucch_harq_delay` | 3.0 slots | Average delay from DL transmission to HARQ ACK/NACK on PUCCH |
+| `avg_pusch_harq_delay` | 3.0 slots | Average delay from UL grant to HARQ processing completion |
+| `max_crc_delay` | 3.0 slots | Maximum CRC delay observed in the window |
+| `max_pucch_harq_delay` | 3.0 slots | Maximum PUCCH HARQ delay |
+| `max_pusch_harq_delay` | 3.0 slots | Maximum PUSCH HARQ delay |
+
+All constant at 3 slots (= 3 ms at 15 kHz SCS), which is the standard NR K2 timing offset. These would spike under CPU overload.
+
+**Invalid UCI events:**
+
+| Field | Observed value | What it is |
+|---|---|---|
+| `nof_pucch_f0f1_invalid_harqs` | 0 | HARQ feedback received on PUCCH format 0/1 that could not be decoded |
+| `nof_pucch_f2f3f4_invalid_harqs` | 0 | Same for PUCCH format 2/3/4 |
+| `nof_pucch_f2f3f4_invalid_csis` | 0 | CSI reports on PUCCH format 2/3/4 that could not be decoded |
+| `nof_pusch_invalid_harqs` | 0 | HARQ multiplexed on PUSCH that could not be decoded |
+| `nof_pusch_invalid_csis` | 0 | CSI multiplexed on PUSCH that could not be decoded |
+
+All zero in steady-state operation. Non-zero values indicate UCI decoding failures and may precede MCS drops.
+
+### 7.2 `cell` measurement -- per-cell, 1 Hz
+
+**Scheduler latency:**
+
+| Field | Observed value | What it is |
+|---|---|---|
+| `average_latency` | 60.6 µs | Average time from TTI trigger to DL grant decision |
+| `max_latency` | 301.2 µs | Maximum scheduler latency in the window |
+| `latency_histogram_0` .. `_9` | ~438, ~466, ~122, ~35, ~9, ~4, ~1, 0, 0, 0 counts | Distribution of scheduling decisions across 10 latency buckets (µs ranges defined by srsRAN build config) |
+
+This is the cell-level view of the same scheduling process that Janus exposes at hook granularity in `jbpf_perf`. The histogram bins correspond roughly to [0-50], [50-100], [100-200], [200-400], [400-800], [800-1600], [1600+] µs ranges.
+
+**Late HARQ and allocation failures:**
+
+| Field | Observed value | What it is |
+|---|---|---|
+| `late_dl_harqs` | 0 | DL HARQ feedback that arrived after the processing deadline |
+| `late_ul_harqs` | 0 | UL HARQ retransmission decisions that missed their deadline |
+| `nof_failed_pdcch_allocs` | 0 | PDCCH allocations that could not be scheduled (search space exhausted) |
+| `nof_failed_uci_allocs` | 0 | UCI (HARQ/CSI/SR) that could not be allocated on PUCCH |
+
+All zero in normal operation. Any non-zero count indicates scheduler overload or resource exhaustion.
+
+**PRACH / random access:**
+
+| Field | Observed value | What it is |
+|---|---|---|
+| `msg3_nof_ok` | ~0 (occasional attach) | Successful Msg3 RACH completions per second |
+| `msg3_nof_nok` | 0 | Failed Msg3 RACH attempts |
+| `avg_prach_delay` | -- (only present during RACH) | Average delay from preamble detection to Msg2 RAR transmission |
+
+Near-zero in steady state; non-zero only during attach/detach events.
+
+**PUCCH resource usage:**
+
+| Field | Observed value | What it is |
+|---|---|---|
+| `pucch_tot_rb_usage_avg` | 0.36 RBs | Average PUCCH RB consumption per slot |
+
+**Error indications:**
+
+| Field | Observed value | What it is |
+|---|---|---|
+| `error_indication_count` | 0 | F1AP error indications received from the DU |
+
+### 7.3 `du` measurement -- DU High thread, 1 Hz
+
+Reports the real-time behaviour of the MAC DL scheduling thread inside the Distributed Unit High layer.
+
+| Field | Observed value | What it is |
+|---|---|---|
+| `du_high_mac_dl_0_average_latency_us` | 195 µs | Average time the DL MAC thread spends per TTI |
+| `du_high_mac_dl_0_min_latency_us` | 29 µs | Minimum observed DL MAC thread latency |
+| `du_high_mac_dl_0_max_latency_us` | 842 µs | Maximum observed DL MAC thread latency |
+| `du_high_mac_dl_0_cpu_usage_percent` | 0.02% | CPU share consumed by the DL MAC thread |
+
+A max spike above the slot duration (1000 µs at 15 kHz SCS) would indicate a deadline miss. This is a thread-level metric, whereas Janus's `jbpf_perf` reports function-level hook latency within that thread.
+
+### 7.4 `cu-cp` measurement -- CU Control Plane, 1 Hz
+
+Reports CU-CP state and mobility statistics.
+
+| Field | Observed value | What it is |
+|---|---|---|
+| `rrcs_nof_handover_executions_requested` | 0 | X2/Xn handover executions initiated |
+| `rrcs_nof_successful_handover_executions` | 0 | Successful handover completions |
+| `ngaps_nof_handover_preparations_requested` | 0 | NG-based handover preparations initiated toward the AMF |
+| `ngaps_nof_successful_handover_preparations` | 0 | Successful NG handover preparations |
+
+All zero in a single-cell experiment. Non-zero in multi-cell or mobility test scenarios.
+
+### 7.5 `event_list` measurement -- event-driven
+
+Asynchronous UE state-change events emitted whenever the gNB transitions a UE through an RRC state.
+
+| Field | What it is |
+|---|---|
+| `event_type` | Event name (e.g., `ue_reconf`, `ue_attach`, `ue_detach`) |
+| `rnti` | RNTI of the UE that triggered the event |
+| `slot` | System frame + slot number at which the event occurred |
+
+Events seen in the 20-min run: two `ue_reconf` events (RRC reconfiguration during initial attach), no detach. Unlike the polled measurements above, these fire immediately when the event occurs rather than at the next 1 s boundary.
 
 ---
 
@@ -287,8 +409,12 @@ These are mostly useful for radio resource management and scheduler debugging. T
 | Infrastructure fault detection | No | Yes |
 | CQI / Rank Indicator | Yes | Partial (CQI yes, RI no) |
 | Scheduling latency histograms | Yes | No |
-| PHR / DL buffer status | Yes | No |
-| Metric count | ~30 fields in 1 table | 60+ fields across 17 measurements |
+| DL buffer status / PHR | Yes | No |
+| PUCCH SNR + TA | Yes | No |
+| DU High thread latency | Yes | No |
+| CU-CP handover / NGAP stats | Yes | No |
+| UE state-change events | Yes | No |
+| Metric count | ~50 fields across 5 tables | 60+ fields across 17 measurements |
 | CPU overhead | Negligible | **< 0.6% of one core** (measured) |
 | Can be loaded/unloaded at runtime | Always on | Yes (`jrtc-ctl`) |
 
