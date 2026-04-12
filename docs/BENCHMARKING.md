@@ -73,9 +73,26 @@ Both pipelines aggregate over a 1 s window, but the standard pipeline uses an ad
 
 The "jBPF leads by" column is the cross-correlation lag measured by interpolating both series to a 0.25 s grid and finding the time shift at peak correlation. jBPF delivers MAC and FAPI metrics **36% more frequently** and the same signal arrives **0.75–1.00 s earlier** on average.
 
-### Overhead Cost
+### Per-Metric Overhead
 
-The standard pipeline is event-driven: the gNB pushes JSON snapshots over WebSocket every ~1 s; `ws_adapter.py` (a lightweight Python script) parses them and pipes to Telegraf's `execd` plugin, which writes to InfluxDB 3. The gNB itself pays no marginal cost for this. jBPF hooks run synchronously inside the gNB and add a measurable overhead.
+For jBPF, every metric is produced by a specific hook executing synchronously inside the gNB. For the standard pipeline, the gNB computes all metrics internally regardless of whether Telegraf is running; Telegraf's single WebSocket poll covers every metric in one pass with no per-metric attribution. The table below shows the per-metric cost in each pipeline.
+
+| Metric | jBPF hook | jBPF inv/s | jBPF p50 (µs) | jBPF CPU % | Standard mechanism | Std CPU % |
+|---|---|---:|---:|---:|---|---:|
+| SINR / SNR | mac_sched_crc_indication | — | — | bounded by §1 | gNB internal → WebSocket | ~0 |
+| UL BLER | mac_sched_crc_indication | — | — | bounded by §1 | gNB internal → WebSocket | ~0 |
+| CQI | mac_sched_uci_indication | — | — | bounded by §1 | gNB internal → WebSocket | ~0 |
+| Timing Advance | mac_sched_uci_indication | — | — | bounded by §1 | gNB internal → WebSocket | ~0 |
+| Rank Indicator | mac_sched_uci_indication | — | — | bounded by §1 | gNB internal → WebSocket | ~0 |
+| BSR | mac_sched_ul_bsr | — | — | bounded by §1 | gNB internal → WebSocket | ~0 |
+| DL MCS | fapi_dl_tti_request | 601 | 1.536 | **0.092** | gNB internal → WebSocket | ~0 |
+| UL MCS | fapi_ul_tti_request | 601 | 0.768 | **0.046** | gNB internal → WebSocket | ~0 |
+| DL Throughput | iperf3 stdout reader | — | — | ~0 | gNB scheduler rate → WebSocket | ~0 |
+| UL Throughput | iperf3 stdout reader | — | — | ~0 | gNB scheduler rate → WebSocket | ~0 |
+
+The six MAC-layer hooks are not individually instrumented by the perf codelet; their combined cost is bounded by the OFF/ON result in §1 (<0.52% for all 60 codelets). The only metrics with a precisely measured per-hook cost are DL MCS and UL MCS. The standard pipeline costs effectively zero per individual metric — the entire Telegraf process averages **~0.13% of one core** at idle regardless of how many metrics it collects.
+
+### Total Pipeline Overhead
 
 | Component | Pipeline | CPU (% of 1 core) | Condition |
 |---|---|---:|---|
@@ -84,7 +101,7 @@ The standard pipeline is event-driven: the gNB pushes JSON snapshots over WebSoc
 | **jBPF total** | jBPF | **+0.51** | active, 10 Mbps UL |
 | Telegraf + ws_adapter.py | Standard | ~0.13 | idle (no active gNB) |
 
-jBPF costs roughly **+0.38 percentage points more** than the standard pipeline. In exchange it delivers metrics 0.75–1.00 s earlier, updates 36% more frequently, and exposes signals (hook latency, per-slot SINR range, HARQ retransmissions) that are not available through the gNB WebSocket at all.
+jBPF costs roughly **+0.38 percentage points more** than the standard pipeline. In exchange it delivers metrics 0.75–1.00 s earlier, updates 36% more frequently, and exposes signals — hook execution latency, per-slot SINR range, HARQ retransmissions — not available through the WebSocket.
 
 ---
 
