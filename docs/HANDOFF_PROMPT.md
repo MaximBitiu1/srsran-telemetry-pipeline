@@ -39,7 +39,7 @@ jrtc (jBPF runtime controller — must start FIRST)
         -> /tmp/decoder.log
         -> scripts/telemetry_to_influxdb.py -> InfluxDB 1.x :8086
                                               (database: srsran_telemetry)
-                                              -> Grafana :3000 (45 panels)
+                                              -> Grafana :3000 (36 panels)
                                                  http://localhost:3000/d/srsran-5g-nr-telemetry/srsran-5g-nr-telemetry
 
 SECOND metrics channel (standard srsRAN):

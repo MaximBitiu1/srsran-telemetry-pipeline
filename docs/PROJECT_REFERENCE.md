@@ -4,7 +4,7 @@
 
 The pipeline instruments an srsRAN Project gNB with approximately 60 eBPF codelets
 (via jBPF), routes the resulting telemetry through a decoder into InfluxDB, and
-visualises all metrics on a 45-panel Grafana dashboard. A custom ZMQ channel broker
+visualises all metrics on a 36-panel Grafana dashboard. A custom ZMQ channel broker
 sits between the gNB and a software UE (srsUE), injecting calibrated RF impairments
 into the IQ sample stream to produce realistic, time-varying MAC-layer telemetry. An
 optional stress injection framework generates labelled anomalous datasets.
@@ -125,7 +125,7 @@ ping -> iperf3 -> srsUE -> Decoder -> Reverse Proxy -> gNB -> ZMQ Broker -> jrtc
 
 ## 5. Grafana Dashboard
 
-45-panel dashboard at `http://localhost:3000` (admin / admin), auto-refresh 5 s.
+36-panel dashboard at `http://localhost:3000` (admin / admin), auto-refresh 5 s.
 
 | Section | Panels | Metrics |
 |---|---|---|
