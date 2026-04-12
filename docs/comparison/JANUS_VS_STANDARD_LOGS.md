@@ -8,7 +8,7 @@ The srsRAN gNB exposes metrics through two separate channels:
 
 2. **Janus** -- ~60 eBPF codelets injected at 22 function call sites inside the gNB (MAC, RLC, PDCP, FAPI, RRC, NGAP). Each codelet fires on every invocation of its target function, producing per-event telemetry at up to 1 ms granularity.
 
-To validate that both channels agree where they overlap -- and to document what each provides that the other cannot -- we ran both systems simultaneously on the same gNB instance, processing identical radio traffic for approximately 9 minutes of steady-state operation. We then extracted the data, time-aligned the overlapping metrics (498--500 aligned pairs per metric), and compared them statistically.
+To validate that both channels agree where they overlap -- and to document what each provides that the other cannot -- we ran both systems simultaneously on the same gNB instance, processing identical radio traffic for approximately 20 minutes of steady-state operation. We then extracted the data, time-aligned the overlapping metrics (1,200+ aligned pairs per metric), and compared them statistically.
 
 ---
 
@@ -64,8 +64,8 @@ Janus's `mac_crc_stats` reports the **UL CRC failure rate** (11.42%) -- how many
 | Channel | GRC broker, Rician fading, K = 1 dB, SNR = 18 dB |
 | Bandwidth | 10 MHz (52 PRBs), 15 kHz SCS |
 | Traffic | iperf3: 10 Mbps UDP UL + 5 Mbps UDP DL (reverse mode) + continuous ping |
-| Duration | ~9 minutes steady-state |
-| Aligned pairs | 498--500 per metric |
+| Duration | ~20 minutes steady-state |
+| Aligned pairs | 1,200+ per metric |
 | Janus | 11 codelet sets -> InfluxDB 1.x on port 8086 |
 | Standard | Telegraf scraping WebSocket :8001 -> InfluxDB 3 on port 8081 |
 
@@ -85,13 +85,15 @@ We identified the following metrics reported by both systems. The table maps eac
 
 | Metric | Janus Source | Standard Source | Notes |
 |---|---|---|---|
-| SINR / SNR | `mac_crc_stats.avg_sinr` | `ue.pusch_snr_db` | r = 0.421, 2.1% mean diff |
+| SINR / SNR | `mac_crc_stats.avg_sinr` | `ue.pusch_snr_db` | r = 0.394, 2.1% mean diff |
 | CQI | `mac_uci_stats.avg_cqi` | `ue.cqi` | Both constant at 15 (srsUE limitation) |
-| DL MCS | `fapi_dl_config.avg_mcs` (UE RNTI) | `ue.dl_mcs` | r = 0.397, 0.1% mean diff |
-| UL MCS | `fapi_ul_config.avg_mcs` (UE RNTI) | `ue.ul_mcs` | r = 0.316, 0.1% mean diff |
+| DL MCS | `fapi_dl_config.avg_mcs` | `ue.dl_mcs` | r = 0.451, 0.1% mean diff |
+| UL MCS | `fapi_ul_config.avg_mcs` | `ue.ul_mcs` | r = 0.374, 0.1% mean diff |
+| DL Throughput | `ue_dl_throughput.bitrate_mbps` (iperf3) | `ue.dl_brate` (MAC) | ~1.80× ratio (layer difference) |
+| UL Throughput | `ue_ul_throughput.bitrate_mbps` (iperf3) | `ue.ul_brate` (MAC) | ~1.71× ratio (layer difference) |
 | BLER | `mac_crc_stats` (UL CRC) | `ue.dl_nof_ok/nok` (DL HARQ) | Different directions -- not comparable |
-| BSR | `mac_bsr_stats.avg_bytes_per_report` | `ue.bsr` | r = 0.148, 12.4% mean diff |
-| Timing Advance | `mac_uci_stats.avg_timing_advance` x T_c | `ue.ta_ns` | r = 0.134, 0.05% mean diff |
+| BSR | `mac_bsr_stats.avg_bytes_per_report` | `ue.bsr` | r = 0.059, 2.1% mean diff |
+| Timing Advance | `mac_uci_stats.avg_timing_advance` × T_c | `ue.ta_ns` | r = 0.018, 0.2% mean diff |
 
 ---
 
@@ -101,11 +103,11 @@ We identified the following metrics reported by both systems. The table maps eac
 
 This is the key result. Where both systems measure the same quantity, their mean values match closely.
 
-**SINR/SNR (r = 0.421, 2.1% mean difference):**
+**SINR/SNR (r = 0.394, 2.1% mean difference):**
 
 ![SINR/SNR Comparison](figures/01_sinr_snr_comparison.png)
 
-Both traces follow the same fading-induced fluctuations. Janus averages 17.33 dB, standard 17.71 dB. The moderate correlation (r = 0.421) reflects that both systems track the same fading channel but with independent per-sample noise from their different averaging windows. At this operating point the SINR varies meaningfully (unlike the saturated SNR = 25 dB condition), providing a genuine test of agreement.
+Both traces follow the same fading-induced fluctuations. Janus averages 17.37 dB, standard 17.74 dB. The moderate correlation (r = 0.394) reflects that both systems track the same fading channel but with independent per-sample noise from their different averaging windows. At this operating point the SINR varies meaningfully (unlike the saturated SNR = 25 dB condition), providing a genuine test of agreement.
 
 **CQI (both constant at 15):**
 
@@ -113,59 +115,76 @@ Both traces follow the same fading-induced fluctuations. Janus averages 17.33 dB
 
 Both systems report CQI = 15 for the entire run. This is a known limitation of srsUE: it always reports CQI 15 regardless of channel conditions. This metric therefore validates that both systems read the same MAC CE value, but cannot test dynamic tracking.
 
-**DL MCS (r = 0.397, 0.1% mean difference):**
+**DL MCS (r = 0.451, 0.1% mean difference):**
 
 ![DL MCS Comparison](figures/03_dl_mcs_comparison.png)
 
-Janus reports 24.97, standard reports 24.96. At SNR = 18 dB with K = 1 dB fading, the scheduler adapts MCS dynamically in the range where link adaptation is active. Both systems track this adaptation. The 0.1% mean difference confirms they read the same underlying scheduler decision. The moderate correlation (r = 0.397) reflects the fact that both systems aggregate over different time windows, so instantaneous samples do not align perfectly even though the trend is the same.
+Janus reports 24.92, standard reports 24.94. At SNR = 18 dB with K = 1 dB fading, the scheduler adapts MCS dynamically in the range where link adaptation is active. Both systems track this adaptation. The 0.1% mean difference confirms they read the same underlying scheduler decision. The moderate correlation (r = 0.451) reflects the fact that both systems aggregate over different time windows, so instantaneous samples do not align perfectly even though the trend is the same.
 
-**UL MCS (r = 0.316, 0.1% mean difference):**
+**UL MCS (r = 0.374, 0.1% mean difference):**
 
 ![UL MCS Comparison](figures/04_ul_mcs_comparison.png)
 
-Janus reports 19.36, standard reports 19.37. The uplink uses a lower MCS than the downlink, consistent with the tighter UL power budget. Both systems agree closely on the mean. The weaker correlation (r = 0.316) compared to DL MCS is consistent with the uplink's narrower MCS variation range.
+Janus reports 19.30, standard reports 19.28. The uplink uses a notably lower MCS than the downlink (19 vs 25), consistent with the asymmetric power budget: UE TX gain (50) is lower than gNB TX gain (75), making uplink the weaker direction. Both systems agree closely on the mean.
 
 **BLER (different directions):**
 
 ![BLER Comparison](figures/07_bler_comparison.png)
 
-Janus reports 11.42% UL CRC failure rate. Standard reports 0.86% DL HARQ error rate. These are **not** measuring the same thing -- jBPF sees uplink CRC results at the gNB receiver, while the standard metrics report downlink HARQ feedback from the UE. The higher UL error rate is expected at this operating point given the asymmetric link budget.
+Janus reports 10.82% UL CRC failure rate. Standard reports 0.86% DL HARQ error rate. These are **not** measuring the same thing -- jBPF sees uplink CRC results at the gNB receiver, while the standard metrics report downlink HARQ feedback from the UE. The higher UL error rate is expected given the asymmetric link budget. Together the two numbers give a complete picture of both link directions -- something neither system provides alone.
 
-### 5.2 BSR and timing advance
+### 5.2 Throughput: different layers, consistent ratio
+
+![DL Throughput Comparison](figures/05_dl_throughput_comparison.png)
+![UL Throughput Comparison](figures/06_ul_throughput_comparison.png)
+
+| Direction | Janus (iperf3 app layer) | Standard (MAC layer) | Ratio |
+|---|---|---|---|
+| DL | 5.00 Mbps | 9.02 Mbps | 1.80× |
+| UL | 10.00 Mbps | 17.11 Mbps | 1.71× |
+
+The ~1.7--1.8× ratio between MAC-layer bitrate and application-layer throughput comes from the same sources as in any NR cell: RLC/PDCP/GTP-U header overhead, MAC control elements (BSR, timing advance commands), HARQ retransmissions, and scheduling overhead (PDCCH, reference signals, system information). Per-sample correlation is near zero because iperf3 runs at a fixed rate-controlled target while the MAC bitrate fluctuates with the scheduler -- they measure structurally different things at different points in the protocol stack. The ~1.75× ratio here is slightly lower than the ~1.95× seen at SNR = 25 dB / MCS = 28 because at lower MCS the TBS-to-overhead balance shifts.
+
+### 5.3 BSR and timing advance
 
 ![BSR Comparison](figures/08_bsr_comparison.png)
 ![Timing Advance Comparison](figures/09_ta_comparison.png)
 
-**BSR (r = 0.148, 12.4% mean difference):** Janus reports an average of 23,066 bytes per BSR report, while the standard reports 26,342 bytes. The 12.4% difference and weak correlation reflect the bursty, timing-sensitive nature of buffer status reports -- the two systems sample different moments in the MAC CE reporting cycle. Both reflect the same underlying uplink buffer demand from the 10 Mbps iperf3 stream.
+**BSR (r = 0.059, 2.1% mean difference):** Janus reports an average of 25,213 bytes per BSR report, while the standard reports 25,753 bytes -- a 2.1% mean difference. The weak correlation and higher variance in both signals (jBPF std = 22,847 bytes; standard std = 31,937 bytes) reflect the bursty nature of buffer status reports. Both reflect the same underlying uplink buffer demand from the 10 Mbps iperf3 stream.
 
-**Timing advance (r = 0.134, 0.05% mean difference):** After converting jBPF's raw N_TA index to nanoseconds (N_TA x T_c), both systems report ~520 ns. Janus gives 520.15 ns, standard gives 519.85 ns -- a 0.05% difference. Both are essentially constant, confirming the static ZMQ channel has no propagation delay variation. The weak correlation is an artefact of correlating two near-constant signals where any variation is measurement noise.
+**Timing advance (r = 0.018, 0.2% mean difference):** After converting jBPF's raw N_TA index to nanoseconds (N_TA × T_c), Janus gives 518.87 ns, standard gives 519.84 ns -- a 0.2% difference. Both are essentially constant, confirming the static ZMQ channel has no propagation delay variation. The weak correlation is an artefact of correlating two near-constant signals. The jBPF TA shows wider sample-to-sample spread (std = 25.9 ns) than the standard (std = 0.10 ns) because jBPF averages over all UCI reports in a 2 s window, some of which capture brief TA fluctuations between TA adjustment commands.
 
-### 5.3 Correlation scatter plots
+### 5.4 Correlation scatter plots
 
 ![Correlation Scatter Plots](figures/13_correlation_scatter.png)
 
-- SINR: moderate correlation (r = 0.421) -- both systems track the same fading envelope but with independent per-sample noise
-- DL MCS: moderate correlation (r = 0.397) -- both track the same scheduler adaptation
-- UL MCS: weak-to-moderate correlation (r = 0.316) -- narrower variation range limits achievable correlation
-- BSR: weak correlation (r = 0.148) -- expected given sampling timing differences
-- TA: weak correlation (r = 0.134) -- near-constant signal, noise-dominated
+- SINR: moderate correlation (r = 0.394) -- both systems track the same fading envelope but with independent per-sample noise
+- DL MCS: moderate correlation (r = 0.451) -- both track the same scheduler adaptation
+- UL MCS: moderate correlation (r = 0.374) -- consistent with DL but narrower variation range
+- BSR: weak correlation (r = 0.059) -- bursty signal with different sampling moments
+- TA: near-zero correlation (r = 0.018) -- near-constant signal, noise-dominated
 - CQI: constant at 15, correlation undefined
 
-### 5.4 Summary table
+### 5.5 Summary table
 
 ![Summary Bar Chart](figures/12_summary_bar_chart.png)
 
 | Metric | Janus Mean | Standard Mean | Difference | Pearson r |
 |---|---|---|---|---|
-| SINR/SNR (dB) | 17.33 | 17.71 | 2.1% | 0.421 |
+| SINR/SNR (dB) | 17.37 | 17.74 | 2.1% | 0.394 |
 | CQI | 15.00 | 15.00 | 0.0% | -- (constant) |
-| DL MCS | 24.97 | 24.96 | 0.1% | 0.397 |
-| UL MCS | 19.36 | 19.37 | 0.1% | 0.316 |
-| BLER (%) | 11.42 (UL) | 0.86 (DL) | n/a | n/a (different direction) |
-| BSR (bytes) | 23,066 | 26,342 | 12.4% | 0.148 |
-| TA (ns) | 520.15 | 519.85 | 0.05% | 0.134 |
+| DL MCS | 24.92 | 24.94 | 0.1% | 0.451 |
+| UL MCS | 19.30 | 19.28 | 0.1% | 0.374 |
+| DL Throughput (Mbps) | 5.00 (app) | 9.02 (MAC) | 1.80× ratio* | ~0 |
+| UL Throughput (Mbps) | 10.00 (app) | 17.11 (MAC) | 1.71× ratio* | ~0 |
+| BLER (%) | 10.82 (UL CRC) | 0.86 (DL HARQ) | n/a† | n/a† |
+| BSR (bytes) | 25,213 | 25,753 | 2.1% | 0.059 |
+| TA (ns) | 518.87 | 519.84 | 0.2% | 0.018 |
 
-### 5.5 Operating-point notes
+\* Expected — different measurement layers (application vs MAC). See §5.2.
+† Different link directions — not a measurement discrepancy. See §2.3.
+
+### 5.6 Operating-point notes
 
 The SNR = 18 dB / K = 1 dB condition places the link in the **adaptive region** where MCS and BLER vary dynamically, unlike the fully saturated SNR = 25 dB / K = 3 dB condition used in earlier experiments. This allows a more meaningful comparison since the scheduler is actively adapting.
 
@@ -277,11 +296,11 @@ These are mostly useful for radio resource management and scheduler debugging. T
 
 ## 9. Takeaway
 
-Where both systems measure the same quantity, their **mean values agree closely**: SINR means differ by 2.1%, DL and UL MCS by 0.1%, and timing advance by 0.05% once the jBPF raw N_TA index is converted to nanoseconds. CQI matches exactly (both 15, though this is a srsUE limitation rather than a channel measurement). BSR shows a larger 12.4% mean difference, which is expected given the timing-sensitive nature of buffer status sampling. These results validate that the eBPF codelets are extracting correct values from the gNB's internal data structures.
+Where both systems measure the same quantity, their **mean values agree closely**: SINR means differ by 2.1%, DL and UL MCS by 0.1%, BSR by 2.1%, and timing advance by 0.2%. CQI matches exactly (both 15, though this is a srsUE limitation rather than a channel measurement). Throughput differs by ~1.75× between Janus (iperf3 application layer) and the standard system (MAC layer) -- a structural difference from protocol overhead, not a data quality issue. These results validate that the eBPF codelets are extracting correct values from the gNB's internal data structures.
 
-Per-sample **time-series correlation** ranges from weak (r = 0.13--0.15 for TA and BSR) to moderate (r = 0.32--0.42 for MCS and SINR). The moderate correlations for SINR and MCS are consistent with two systems that use different aggregation windows (1 s vs 2 s) independently sampling the same fading process. The weak correlations for BSR and TA reflect metrics that are either near-constant (TA) or bursty and timing-sensitive (BSR). These correlation values are honest: the two systems do not produce identical per-sample traces, but they do track the same underlying channel and scheduler state.
+Per-sample **time-series correlation** ranges from near-zero (r ≈ 0.02--0.06 for TA and BSR) to moderate (r = 0.37--0.45 for MCS and SINR). The moderate correlations for SINR and MCS are consistent with two systems that use different aggregation windows (1 s vs 2 s) independently sampling the same fading process. The weak correlations for BSR and TA reflect metrics that are either near-constant (TA) or bursty and timing-sensitive (BSR).
 
-BLER cannot be directly compared because jBPF reports UL CRC failures (11.42%) while the standard reports DL HARQ errors (0.86%). These measure different directions of the radio link.
+BLER cannot be directly compared because jBPF reports UL CRC failures (10.82%) while the standard reports DL HARQ errors (0.86%). These measure different directions of the radio link. Together they give a complete picture of both link directions that neither system provides alone.
 
 The two channels are complementary. Standard gives a low-overhead overview of radio-layer health. Janus adds three things the standard channel cannot provide:
 
@@ -303,7 +322,7 @@ docker compose -f docker-compose.yml -f docker-compose.metrics.yml \
 cd ~/Desktop/srsran-telemetry-pipeline/scripts
 bash launch_mac_telemetry.sh --grc --fading --k-factor 1 --snr 18
 
-# Wait ~9 minutes for steady-state, then extract and compare
+# Wait ~10 minutes for steady-state, then extract and compare
 python3 extract_and_compare.py
 
 # Or run the live side-by-side comparison
