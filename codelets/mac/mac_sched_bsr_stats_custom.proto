@@ -1,0 +1,19 @@
+// BSR custom codelet proto — adds sliding window average on buffer bytes.
+// Variance omitted for BSR (KB^2 values overflow int32; sum_sq needs int64).
+
+syntax = "proto2";
+
+message t_bsr_stats_custom {
+   required uint32 du_ue_index = 1;
+   required uint32 cnt = 2;                // BSR events in reporting window
+   required uint64 total_bytes = 3;        // sum of bytes in reporting window
+   required uint64 max_bytes = 4;          // max bytes seen in reporting window
+   // Sliding window (last 16 BSR events, stored in KB = bytes >> 10)
+   required int32  bsr_sliding_avg_kb = 5; // sliding window average (KB)
+   required uint32 bsr_sliding_cnt = 6;    // samples in window (≤ 16)
+}
+
+message bsr_stats_custom {
+   required uint64 timestamp = 1;
+   repeated t_bsr_stats_custom stats = 2;
+}

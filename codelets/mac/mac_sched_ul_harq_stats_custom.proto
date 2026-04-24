@@ -1,0 +1,23 @@
+// UL HARQ MCS custom codelet proto — adds variance and sliding window average on MCS.
+// Based on mac_sched_harq_stats.proto
+
+syntax = "proto2";
+
+message t_ul_harq_stats_custom {
+   required uint32 du_ue_index = 1;
+   required uint32 mcs_count = 2;           // number of HARQ events in window
+   required uint32 mcs_sum = 3;             // sum of MCS values in window
+   required uint32 mcs_min = 4;             // min MCS in window
+   required uint32 mcs_max = 5;             // max MCS in window
+   // Sliding window fields (last 16 HARQ MCS values)
+   required int32  mcs_sliding_avg = 6;     // sliding window average of MCS
+   required uint32 mcs_sliding_cnt = 7;     // samples currently in window
+   required int32  mcs_variance = 8;        // variance of MCS: E[X^2] - E[X]^2
+   // HARQ retransmission count
+   required uint32 cons_retx_max = 9;       // max consecutive retransmissions in window
+}
+
+message ul_harq_stats_custom {
+   required uint64 timestamp = 1;
+   repeated t_ul_harq_stats_custom stats = 2;
+}

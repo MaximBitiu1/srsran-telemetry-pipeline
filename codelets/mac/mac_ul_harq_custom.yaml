@@ -1,0 +1,31 @@
+codeletset_id: mac_ul_harq_custom
+
+codelet_descriptor:
+
+  - codelet_name: mac_stats_collect_ul_harq_custom
+    codelet_path: ${JBPF_CODELETS}/mac/mac_stats_collect_ul_harq_custom.o
+    hook_name: report_stats
+    priority: 1
+    out_io_channel:
+      - name: output_map_ul_harq_custom
+        forward_destination: DestinationUDP
+        serde:
+          file_path: ${JBPF_CODELETS}/mac/mac_sched_ul_harq_stats_custom:ul_harq_stats_custom_serializer.so
+          protobuf:
+            package_path: ${JBPF_CODELETS}/mac/mac_sched_ul_harq_stats_custom.pb
+            msg_name: ul_harq_stats_custom
+
+  - codelet_name: mac_sched_ul_harq_stats_custom
+    codelet_path: ${JBPF_CODELETS}/mac/mac_sched_ul_harq_stats_custom.o
+    hook_name: mac_sched_harq_ul
+    priority: 1
+    linked_maps:
+      - map_name: stats_map_ul_harq_custom
+        linked_codelet_name: mac_stats_collect_ul_harq_custom
+        linked_map_name: stats_map_ul_harq_custom
+      - map_name: ul_harq_custom_hash
+        linked_codelet_name: mac_stats_collect_ul_harq_custom
+        linked_map_name: ul_harq_custom_hash
+      - map_name: ul_harq_custom_not_empty
+        linked_codelet_name: mac_stats_collect_ul_harq_custom
+        linked_map_name: ul_harq_custom_not_empty

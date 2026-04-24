@@ -492,6 +492,52 @@ def make_points(ts, schema, pkg, data):
                 }
             })
 
+    elif schema == "bsr_stats_custom":
+        # Custom BSR — sliding window average over buffer bytes (KB)
+        for s in data.get("stats", []):
+            ue = s.get("duUeIndex", 0)
+            if ue == 513 or ue >= 32:
+                continue
+            cnt = safe_int(s.get("cnt", 0))
+            total_bytes = safe_int(s.get("totalBytes", 0))
+            points.append({
+                "measurement": "mac_bsr_stats_custom",
+                "tags": {"ue": str(ue)},
+                "time": iso_ts,
+                "fields": {
+                    "cnt": cnt,
+                    "total_bytes": float(total_bytes),
+                    "avg_bytes": safe_div(total_bytes, cnt),
+                    "max_bytes": float(s.get("maxBytes", 0)),
+                    "bsr_sliding_avg_kb": safe_float(s.get("bsrSlidingAvgKb", 0)),
+                    "bsr_sliding_avg_mb": safe_float(s.get("bsrSlidingAvgKb", 0)) / 1024.0,
+                    "bsr_sliding_cnt": safe_int(s.get("bsrSlidingCnt", 0)),
+                }
+            })
+
+    elif schema == "ul_harq_stats_custom":
+        # Custom UL HARQ — sliding window average + variance on MCS
+        for s in data.get("stats", []):
+            ue = s.get("duUeIndex", 0)
+            if ue == 513 or ue >= 32:
+                continue
+            cnt = safe_int(s.get("mcsCount", 0))
+            points.append({
+                "measurement": "mac_ul_harq_stats_custom",
+                "tags": {"ue": str(ue)},
+                "time": iso_ts,
+                "fields": {
+                    "mcs_count": cnt,
+                    "avg_mcs": safe_div(s.get("mcsSum", 0), cnt),
+                    "mcs_min": safe_int(s.get("mcsMin", 0)),
+                    "mcs_max": safe_int(s.get("mcsMax", 0)),
+                    "mcs_sliding_avg": safe_float(s.get("mcsSlidingAvg", 0)),
+                    "mcs_sliding_cnt": safe_int(s.get("mcsSlidingCnt", 0)),
+                    "mcs_variance": safe_float(s.get("mcsVariance", 0)),
+                    "cons_retx_max": safe_int(s.get("consRetxMax", 0)),
+                }
+            })
+
     return points
 
 # ── Tail file implementation ─────────────────────────────────────────────────

@@ -393,6 +393,8 @@ CODELET_SETS=(
   "ngap/ngap.yaml"                              # NGAP: procedure start/complete/reset (3 codelets)
   "perf/jbpf_stats.yaml"                        # jbpf perf: internal stats (1 codelet)
   "mac/mac_stats_custom.yaml"                   # Custom SINR: variance + sliding window (2 codelets)
+  "mac/mac_bsr_custom.yaml"                     # Custom BSR: sliding window average on buffer bytes (2 codelets)
+  "mac/mac_ul_harq_custom.yaml"                 # Custom UL HARQ: sliding window + variance on MCS (2 codelets)
 )
 
 LOADED=0
