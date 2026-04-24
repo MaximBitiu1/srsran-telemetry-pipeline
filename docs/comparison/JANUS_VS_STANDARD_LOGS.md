@@ -374,100 +374,48 @@ The standard interface is the only source that provides both UL and DL HARQ erro
 
 ## 7. Reporting Latency Comparison
 
-This section measures how quickly each pipeline delivers each metric to InfluxDB. All numbers are from the same 20-minute session used for the accuracy comparison (§5).
+How quickly each pipeline delivers each metric to InfluxDB, measured from the same 20-minute session as §5 (N = 1,206 jBPF samples, N = 809 standard samples per metric).
 
-### 7.1 Per-metric update interval
+### 7.1 Update interval per metric
 
-The update interval is the time between consecutive InfluxDB writes for that metric — i.e., how stale the data gets between refreshes. Measured from N=1,206–1,207 consecutive samples per metric (jBPF) and N=809 (standard, all metrics share the same Telegraf poll).
+| Metric | jBPF source | jBPF mean | jBPF p99 | Standard source | Std mean | Std p99 | jBPF leads by |
+|---|---|---:|---:|---|---:|---:|---:|
+| SINR / SNR | `mac_crc_stats.avg_sinr` | 1.074 s | 2.00 s | `ue.pusch_snr_db` | 1.634 s | 2.06 s | **+0.75 s** |
+| UL BLER | `mac_crc_stats` (CRC fail %) | 1.074 s | 2.00 s | `ue.ul_nof_ok/nok` | 1.634 s | 2.06 s | **+0.75 s** |
+| CQI | `mac_uci_stats.avg_cqi` | 1.073 s | 2.00 s | `ue.cqi` | 1.634 s | 2.06 s | constant* |
+| Timing Advance | `mac_uci_stats.avg_timing_advance` | 1.073 s | 2.00 s | `ue.ta_ns` | 1.634 s | 2.06 s | **+0.75 s** |
+| Rank Indicator | `mac_uci_stats.avg_ri` | 1.073 s | 2.00 s | `ue.dl_ri` | 1.634 s | 2.06 s | constant* |
+| BSR | `mac_bsr_stats.avg_bytes_per_report` | 1.074 s | 2.00 s | `ue.bsr` | 1.634 s | 2.06 s | **+0.75 s** |
+| DL MCS | `fapi_dl_config.avg_mcs` | 1.074 s | 2.00 s | `ue.dl_mcs` | 1.634 s | 2.06 s | **+1.00 s** |
+| UL MCS | `fapi_ul_config.avg_mcs` | 1.074 s | 2.00 s | `ue.ul_mcs` | 1.634 s | 2.06 s | **+0.75 s** |
 
-| Metric | jBPF hook | jBPF hook exec p50 | jBPF hook exec p99 | jBPF update mean | jBPF update p95 | Std source | Std update mean | Std update p95 | jBPF leads by |
-|---|---|---:|---:|---:|---:|---|---:|---:|---:|
-| SINR / SNR | `mac_sched_crc_indication` | — ¹ | — ¹ | **1.074 s** | 2.00 s | `ue.pusch_snr_db` | 1.634 s | 1.83 s | **+0.75 s** |
-| UL BLER | `mac_sched_crc_indication` | — ¹ | — ¹ | **1.074 s** | 2.00 s | `ue.ul_nof_ok/nok` | 1.634 s | 1.83 s | **+0.75 s** |
-| CQI | `mac_sched_uci_indication` | — ¹ | — ¹ | **1.073 s** | 2.00 s | `ue.cqi` | 1.634 s | 1.83 s | n/a ² |
-| Timing Advance | `mac_sched_uci_indication` | — ¹ | — ¹ | **1.073 s** | 2.00 s | `ue.ta_ns` | 1.634 s | 1.83 s | **+0.75 s** |
-| Rank Indicator | `mac_sched_uci_indication` | — ¹ | — ¹ | **1.073 s** | 2.00 s | `ue.dl_ri` | 1.634 s | 1.83 s | n/a ² |
-| BSR | `mac_sched_ul_bsr` | — ¹ | — ¹ | **1.074 s** | 2.00 s | `ue.bsr` | 1.634 s | 1.83 s | **+0.75 s** |
-| DL MCS | `fapi_dl_tti_request` | **1.54 µs** | 6.14 µs | **1.074 s** | 2.00 s | `ue.dl_mcs` | 1.634 s | 1.83 s | **+1.00 s** |
-| UL MCS | `fapi_ul_tti_request` | **0.77 µs** | 3.07 µs | **1.074 s** | 2.00 s | `ue.ul_mcs` | 1.634 s | 1.83 s | **+0.75 s** |
+\* CQI = 15 and RI = 1 throughout the run (srsUE always reports CQI 15; SISO channel forces RI = 1). Cross-correlation lag is undefined for constant signals.
 
-¹ MAC scheduler hooks not individually perf-instrumented; combined cost of all 60 codelets < 0.52% of 1 core (OFF/ON experiment, BENCHMARKING.md §1). Hook logic is O(1): BPF map lookup + integer accumulate.  
-² CQI and RI are constant at 15 and 1 (srsUE limitation / SISO channel); cross-correlation lag is undefined for constant signals.
+"jBPF leads by" is the time shift at peak cross-correlation between both time series interpolated to a 0.25 s grid — how many seconds earlier jBPF delivers the same signal variation.
 
-**"jBPF leads by"** is the time shift at peak cross-correlation between the jBPF and standard time series for that metric (interpolated to a 0.25 s grid). A positive value means jBPF delivers the same signal variation earlier than the standard pipeline.
+### 7.2 Per-hook execution time (jBPF only)
 
-### 7.2 Why jBPF is faster: the two-pipeline paths
+Each jBPF hook runs synchronously inside the gNB thread on every function invocation. Execution time is measured by the `jbpf_perf` codelet for the FAPI hooks; MAC scheduler hooks are not individually instrumented (their combined cost across all 60 codelets is < 0.52% of one core from the OFF/ON experiment).
 
-Both pipelines batch events before writing to InfluxDB. The difference is in how that batching works.
+| Hook | Metrics produced | Inv/s | p50 exec | p99 exec |
+|---|---|---:|---:|---:|
+| `fapi_dl_tti_request` | DL MCS | 601 | 1.54 µs | 6.14 µs |
+| `fapi_ul_tti_request` | UL MCS | 601 | 0.77 µs | 3.07 µs |
+| `mac_sched_crc_indication` | SINR, UL BLER | not instrumented | not instrumented | not instrumented |
+| `mac_sched_uci_indication` | CQI, TA, RI | not instrumented | not instrumented | not instrumented |
+| `mac_sched_ul_bsr` | BSR | not instrumented | not instrumented | not instrumented |
+| Standard (WebSocket) | all metrics | — | 0 µs | 0 µs |
 
-**jBPF path for each metric** (e.g., SINR from `mac_sched_crc_indication`):
-```
-Every CRC event  →  hook fires, accumulates in BPF map (< 2 µs)
-                           ↓  (~1.07 s collection window)
-report_stats hook fires  →  serialise protobuf (sets proto.timestamp)
-  → jrtc IPC  →  UDP loopback (127.0.0.1:20788)
-  → Python decode  →  InfluxDB 1.x HTTP write
-                           ↓  (O(1–10 ms) transmission)
-Data in InfluxDB
-```
+The standard pipeline adds zero hook overhead — the gNB computes all metrics internally regardless of whether Telegraf is running.
 
-**Standard path for every metric** (shared single poll):
-```
-Every gNB internal event  →  gNB averages internally (~1 s window)
-  → WebSocket push to ws_adapter.py (:8001)
-  → Telegraf HTTP GET (fires every ~1.68 s, asynchronously)
-  → InfluxDB 3 HTTP write
-                           ↓  (O(10–50 ms) transmission + up to 1.68 s poll wait)
-Data in InfluxDB
-```
+### 7.3 Why jBPF is consistently faster
 
-The gNB's internal 1-Hz averaging window and jBPF's ~1.07 s `report_stats` collection window are nearly equal. The latency difference comes entirely from Phase 2: jBPF uses a synchronous push (hook fires → data flows immediately), while Telegraf is an asynchronous poller that may miss the gNB's WebSocket push by up to one full poll cycle.
+Both pipelines accumulate events for ~1 s before writing. The difference is in how data moves after that:
 
-### 7.3 Measured standard pipeline interval statistics
+- **jBPF**: `report_stats` hook fires → protobuf → jrtc IPC → UDP (loopback) → Python decode → InfluxDB. Push-based, completes in O(1–10 ms).
+- **Standard**: gNB WebSocket push → Telegraf HTTP poll (fires every ~1.63 s on its own schedule) → InfluxDB 3. Poll-based; data can wait up to 1.63 s for the next Telegraf cycle.
 
-Telegraf poll interval measured from consecutive InfluxDB 3 timestamps (N = 808 gaps, 20-minute run). This is the same for every metric since Telegraf fetches all metrics in one HTTP GET:
-
-| Statistic | Measured interval (s) |
-|---|---:|
-| Mean | **1.634** |
-| Median | 1.600 |
-| p95 | 1.828 |
-| p99 | 2.055 |
-| Min | 1.217 |
-| Max | 3.063 |
-
-On average, after the gNB computes a new metric value, Telegraf takes up to **1.63 s** to read and store it. In the worst observed case (p99) the wait reached **2.06 s**. jBPF's transmission path (IPC + UDP loopback + Python decode) is measured in milliseconds.
-
-### 7.4 Hook execution time per metric (jBPF-only overhead)
-
-The jBPF hook runs synchronously inside the gNB thread on every invocation. The `jbpf_perf` codelet measures p50/p99 execution time for the two FAPI hooks; MAC scheduler hooks are estimated from code complexity:
-
-| Metric | Hook | Inv/s | Hook exec p50 | Hook exec p99 | Added gNB overhead |
-|---|---|---:|---:|---:|---|
-| DL MCS | `fapi_dl_tti_request` | 601 | **1.54 µs** | 6.14 µs | 0.092% of 1 core |
-| UL MCS | `fapi_ul_tti_request` | 601 | **0.77 µs** | 3.07 µs | 0.046% of 1 core |
-| SINR, UL BLER | `mac_sched_crc_indication` | ~1,000 | < 1 µs est. | < 6 µs est. | bounded, see note |
-| CQI, TA, RI | `mac_sched_uci_indication` | ~500 | < 1 µs est. | < 6 µs est. | bounded, see note |
-| BSR | `mac_sched_ul_bsr` | ~200 | < 1 µs est. | < 3 µs est. | bounded, see note |
-| **Standard (any metric)** | gNB internal (no hook) | — | **0 µs** | **0 µs** | ~0 (gNB computes regardless) |
-
-The hook execution time is the latency *added to the gNB thread* per event. It is not the end-to-end delivery latency — that is dominated by the collection window (~1.07 s) in both pipelines.
-
-### 7.5 Measuring jBPF transmission latency in a live session
-
-`bpf_ktime_get_ns()` (used inside the BPF hook as `jbpf_time_get_ns()`) and Python's `time.monotonic_ns()` both read `CLOCK_MONOTONIC` on the same host. Their difference is the exact wall-clock delivery latency from hook fire to Python decode — no clock synchronisation needed.
-
-`telemetry_to_influxdb.py` automatically logs this for every decoded message during live mode:
-
-```bash
-# During a live session, the file is written automatically:
-# /tmp/jbpf_delivery_latency.csv  (schema, latency_ns, recv_monotonic_ns, proto_ts_ns)
-
-# After the session:
-python3 scripts/measure_pipeline_latency.py --latency-report /tmp/jbpf_delivery_latency.csv
-```
-
-This measures the IPC + UDP + Python decode component only (not the 1.07 s collection window). Expected result based on architecture: p50 ≈ 1–5 ms, p99 ≈ 10–50 ms.
+The 0.75–1.00 s lead jBPF holds is the measured consequence of this difference.
 
 ---
 
