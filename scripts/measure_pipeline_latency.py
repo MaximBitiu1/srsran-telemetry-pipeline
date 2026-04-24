@@ -31,10 +31,12 @@ Outputs
   (stdout table)                              — human-readable summary
 """
 
+import csv
 import json
 import sys
 import urllib.request
 import urllib.parse
+from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -270,9 +272,80 @@ def extract_perf_overhead(session_start):
     return result
 
 
+# ── delivery latency report (from telemetry_to_influxdb.py latency CSV) ──────
+
+def latency_report(csv_path: str) -> None:
+    """
+    Analyse the per-message delivery latency CSV produced by telemetry_to_influxdb.py
+    (written to /tmp/jbpf_delivery_latency.csv during a live session).
+
+    Each row: schema, latency_ns, recv_monotonic_ns, proto_ts_ns
+    latency_ns = time from report_stats hook firing to Python decode
+    (CLOCK_MONOTONIC ns difference, valid because both bpf_ktime_get_ns()
+    and time.monotonic_ns() use the same CLOCK_MONOTONIC on the same host).
+    """
+    rows = defaultdict(list)
+    with open(csv_path, newline="") as f:
+        for row in csv.DictReader(f):
+            ns = int(row["latency_ns"])
+            rows[row["schema"]].append(ns)
+
+    print("=" * 72)
+    print("jBPF per-message delivery latency  (hook firing → Python decode)")
+    print(f"Source: {csv_path}")
+    print("=" * 72)
+
+    all_ns = []
+    hdr = f"{'Schema':<35}  {'N':>6}  {'p50 ms':>7}  {'p95 ms':>7}  {'p99 ms':>7}  {'max ms':>7}"
+    print(hdr)
+    print("-" * len(hdr))
+
+    for schema in sorted(rows):
+        arr = np.array(rows[schema])
+        all_ns.extend(rows[schema])
+        p50 = np.percentile(arr, 50) / 1e6
+        p95 = np.percentile(arr, 95) / 1e6
+        p99 = np.percentile(arr, 99) / 1e6
+        mx  = arr.max() / 1e6
+        print(f"{schema:<35}  {len(arr):>6}  {p50:>7.2f}  {p95:>7.2f}  {p99:>7.2f}  {mx:>7.2f}")
+
+    if all_ns:
+        arr = np.array(all_ns)
+        print("-" * len(hdr))
+        print(f"{'ALL (combined)':<35}  {len(arr):>6}  "
+              f"{np.percentile(arr,50)/1e6:>7.2f}  "
+              f"{np.percentile(arr,95)/1e6:>7.2f}  "
+              f"{np.percentile(arr,99)/1e6:>7.2f}  "
+              f"{arr.max()/1e6:>7.2f}")
+
+    print()
+    print("Interpretation:")
+    print("  latency = jrtc IPC + UDP loopback + Python protobuf decode")
+    print("  (NOT including the BPF collection window; that is shown by reporting interval)")
+    print()
+    print("Standard pipeline comparison (srsRAN WebSocket → Telegraf → InfluxDB 3):")
+    print("  Telegraf poll interval: ~1.68 s mean (measured)")
+    print("  Transmission (HTTP GET + parse + InfluxDB write): ~10-50 ms (architecture estimate)")
+    print()
+
+
 # ── main ──────────────────────────────────────────────────────────────
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Pipeline latency & overhead measurement")
+    parser.add_argument(
+        "--latency-report", metavar="CSV",
+        help="Print per-message delivery latency from a telemetry_to_influxdb.py "
+             "latency CSV file and exit (file written to /tmp/jbpf_delivery_latency.csv "
+             "during a live session)."
+    )
+    args = parser.parse_args()
+
+    if args.latency_report:
+        latency_report(args.latency_report)
+        return
+
     print("=" * 64)
     print("Pipeline latency & overhead measurement")
     print("=" * 64)

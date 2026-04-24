@@ -14,6 +14,7 @@ Modes:
     Replay: ingest an existing log file (e.g., from a previous collection run)
 """
 import argparse
+import csv
 import json
 import os
 import re
@@ -31,10 +32,12 @@ DEFAULT_PORT = 8086
 BATCH_SIZE = 50          # Write every N points
 FLUSH_INTERVAL = 2.0     # Or flush every N seconds
 TAIL_POLL_INTERVAL = 0.1 # seconds between tail polls
+LATENCY_LOG = "/tmp/jbpf_delivery_latency.csv"  # Per-message E2E delivery latency log
 
 # ── Global state ─────────────────────────────────────────────────────────────
 running = True
 stats = {"parsed": 0, "written": 0, "errors": 0, "skipped": 0}
+_latency_writer = None  # CSV writer for delivery latency log (set in main)
 
 def signal_handler(sig, frame):
     global running
@@ -43,6 +46,29 @@ def signal_handler(sig, frame):
 
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
+
+# ── Delivery latency measurement ─────────────────────────────────────────────
+def record_latency(schema: str, proto_ts_ns: int) -> None:
+    """Record per-message delivery latency: monotonic_now - proto_timestamp.
+
+    proto_ts_ns is jbpf_time_get_ns() = bpf_ktime_get_ns() = CLOCK_MONOTONIC ns,
+    directly comparable with time.monotonic_ns() on the same host.
+    Latency = time from report_stats hook firing to Python decode.
+    Written to LATENCY_LOG CSV for offline analysis by measure_pipeline_latency.py.
+    """
+    if _latency_writer is None:
+        return
+    recv_ns = time.monotonic_ns()
+    latency_ns = recv_ns - proto_ts_ns
+    if latency_ns < 0 or latency_ns > 10_000_000_000:
+        # Sanity check: skip implausible values (> 10 s or negative)
+        return
+    _latency_writer.writerow({
+        "schema": schema,
+        "latency_ns": latency_ns,
+        "recv_monotonic_ns": recv_ns,
+        "proto_ts_ns": proto_ts_ns,
+    })
 
 # ── Log line parser ──────────────────────────────────────────────────────────
 LINE_RE = re.compile(r'^time="([^"]+)".*msg="REC: (.+)"$')
@@ -603,6 +629,10 @@ def main():
     parser.add_argument("--drop", action="store_true", help="Drop and recreate the database before starting")
     parser.add_argument("--from-beginning", action="store_true", dest="from_beginning",
                         help="Read log from the beginning on startup (captures events before ingestor starts, e.g. NGAP/RRC attach)")
+    parser.add_argument("--latency-log", default=LATENCY_LOG, dest="latency_log",
+                        metavar="FILE",
+                        help=f"CSV file for per-message delivery latency (default: {LATENCY_LOG}). "
+                             "Set to '' to disable. Only used in live mode.")
     args = parser.parse_args()
 
     # Connect to InfluxDB
@@ -641,6 +671,21 @@ def main():
         # (NGAP, RRC attach, etc.) that fired before the ingestor started.
         line_gen = tail_file(filepath, from_beginning=(args.drop or args.from_beginning))
 
+    # Open latency log (live mode only)
+    global _latency_writer
+    _latency_f = None
+    if mode == "live" and args.latency_log:
+        try:
+            _latency_f = open(args.latency_log, "w", newline="", buffering=1)
+            _latency_writer = csv.DictWriter(
+                _latency_f,
+                fieldnames=["schema", "latency_ns", "recv_monotonic_ns", "proto_ts_ns"],
+            )
+            _latency_writer.writeheader()
+            print(f"[INFO] Delivery latency log → {args.latency_log}")
+        except OSError as e:
+            print(f"[WARN] Cannot open latency log {args.latency_log}: {e}")
+
     # Process lines
     batch = []
     last_flush = time.time()
@@ -653,6 +698,15 @@ def main():
 
         ts, schema, pkg, data = result
         stats["parsed"] += 1
+
+        # Record per-message E2E delivery latency (only in live mode, not replay)
+        if mode == "live":
+            proto_ts = data.get("timestamp")
+            if proto_ts is not None:
+                try:
+                    record_latency(schema, int(proto_ts))
+                except (TypeError, ValueError):
+                    pass
 
         points = make_points(ts, schema, pkg, data)
         if points:
@@ -683,6 +737,13 @@ def main():
         except Exception as e:
             stats["errors"] += 1
             print(f"[ERROR] Final flush failed: {e}")
+
+    # Close latency log
+    if _latency_f:
+        _latency_f.close()
+        if args.latency_log:
+            print(f"[INFO] Latency log written to {args.latency_log}")
+            print(f"[INFO] Analyse with: python3 scripts/measure_pipeline_latency.py --latency-report {args.latency_log}")
 
     print(f"\n[DONE] {mode.upper()} complete:")
     print(f"  Parsed:  {stats['parsed']}")
