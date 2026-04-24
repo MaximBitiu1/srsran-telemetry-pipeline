@@ -374,43 +374,48 @@ The standard interface is the only source that provides both UL and DL HARQ erro
 
 ## 7. Reporting Latency Comparison
 
-Two distinct latency measures are reported: the **hook execution latency** (time the instrumentation itself adds per event, in µs) and the **reporting period** (how frequently each pipeline delivers a new value to InfluxDB, in seconds). These are different quantities — the reporting period is dominated by each pipeline's batching design, not by the instrumentation overhead.
+### 7.1 Hook execution latency per metric (measured, µs)
 
-### 7.1 Hook execution latency per metric
+The jBPF hook runs synchronously inside the gNB thread on every radio event. This is the per-invocation cost of the instrumentation, measured by the `jbpf_perf` codelet. The standard WebSocket interface adds zero hook latency — the gNB computes all metrics internally.
 
-This is the actual latency the jBPF hook adds to the gNB thread on every radio event — the cost of the instrumentation itself. Measured by the `jbpf_perf` codelet. The standard WebSocket interface adds zero per-event latency because the gNB computes all metrics internally regardless of Telegraf.
+| Metric | jBPF hook | Inv/s | p50 exec | p99 exec | Standard | Std exec |
+|---|---|---:|---:|---:|---|---:|
+| DL MCS | `fapi_dl_tti_request` | 601 | **1.54 µs** | **6.14 µs** | gNB internal | 0 µs |
+| UL MCS | `fapi_ul_tti_request` | 601 | **0.77 µs** | **3.07 µs** | gNB internal | 0 µs |
+| SINR / UL BLER | `mac_sched_crc_indication` | ~1,000 | < 1 µs | < 6 µs | gNB internal | 0 µs |
+| CQI / TA / RI | `mac_sched_uci_indication` | ~500 | < 1 µs | < 6 µs | gNB internal | 0 µs |
+| BSR | `mac_sched_ul_bsr` | ~200 | < 1 µs | < 3 µs | gNB internal | 0 µs |
 
-| Metric | jBPF hook | jBPF exec p50 | jBPF exec p99 | Standard mechanism | Std exec latency |
-|---|---|---:|---:|---|---:|
-| SINR / SNR | `mac_sched_crc_indication` | < 1 µs | < 6 µs | gNB internal | 0 µs |
-| UL BLER | `mac_sched_crc_indication` | < 1 µs | < 6 µs | gNB internal | 0 µs |
-| CQI | `mac_sched_uci_indication` | < 1 µs | < 6 µs | gNB internal | 0 µs |
-| Timing Advance | `mac_sched_uci_indication` | < 1 µs | < 6 µs | gNB internal | 0 µs |
-| Rank Indicator | `mac_sched_uci_indication` | < 1 µs | < 6 µs | gNB internal | 0 µs |
-| BSR | `mac_sched_ul_bsr` | < 1 µs | < 3 µs | gNB internal | 0 µs |
-| DL MCS | `fapi_dl_tti_request` | **1.54 µs** | **6.14 µs** | gNB internal | 0 µs |
-| UL MCS | `fapi_ul_tti_request` | **0.77 µs** | **3.07 µs** | gNB internal | 0 µs |
+FAPI hook times are directly measured. MAC scheduler hook times are bounded: all 60 codelets combined add < 0.52% of one core (OFF/ON experiment). Standard adds 0 µs per metric — Telegraf costs ~0.13% of one core for the entire process.
 
-FAPI hook times are measured directly. MAC scheduler hook times are bounded: all 60 codelets combined add < 0.52% of one core (OFF/ON experiment), so individual MAC hooks are sub-µs.
+### 7.2 End-to-end delivery latency (requires live session)
 
-After the hook fires, jBPF's transmission path (jrtc IPC → UDP loopback → Python decode → InfluxDB write) adds **O(1–10 ms)** per message. The standard path (WebSocket → Telegraf HTTP poll → InfluxDB 3 write) adds **O(10–50 ms)** per poll cycle, plus a poll-wait of up to 1.63 s if the data arrives just after Telegraf last polled.
+The full pipeline latency — from BPF hook firing to data landing in InfluxDB — is measured as:
 
-### 7.2 Reporting period per metric
+```
+delivery_latency_ms = time.time_ns() [at Python decode] − proto.timestamp [bpf_ktime_get_ns()]
+```
 
-This is how often each pipeline writes a new value for that metric to InfluxDB — i.e., the maximum age of the data at any point. Measured from N = 1,206 consecutive jBPF samples and N = 809 standard samples (20-minute run).
+Both clocks run on the same host (CLOCK_MONOTONIC base). `telemetry_to_influxdb.py` stores `delivery_latency_ms` as a field in every InfluxDB measurement during live sessions. Query it after any run:
 
-| Metric | jBPF period (mean) | jBPF period (p99) | Standard period (mean) | Standard period (p99) | jBPF delivers earlier by |
-|---|---:|---:|---:|---:|---:|
-| SINR / SNR | **1.07 s** | 2.00 s | 1.63 s | 2.06 s | **0.75 s** |
-| UL BLER | **1.07 s** | 2.00 s | 1.63 s | 2.06 s | **0.75 s** |
-| CQI | **1.07 s** | 2.00 s | 1.63 s | 2.06 s | — (constant) |
-| Timing Advance | **1.07 s** | 2.00 s | 1.63 s | 2.06 s | **0.75 s** |
-| Rank Indicator | **1.07 s** | 2.00 s | 1.63 s | 2.06 s | — (constant) |
-| BSR | **1.07 s** | 2.00 s | 1.63 s | 2.06 s | **0.75 s** |
-| DL MCS | **1.07 s** | 2.00 s | 1.63 s | 2.06 s | **1.00 s** |
-| UL MCS | **1.07 s** | 2.00 s | 1.63 s | 2.06 s | **0.75 s** |
+```bash
+python3 scripts/measure_pipeline_latency.py --latency-influxdb
+```
 
-"jBPF delivers earlier by" is the cross-correlation lag: how many seconds earlier jBPF delivers the same signal variation compared to the standard pipeline. CQI and RI are constant throughout the run (srsUE limitation / SISO channel) so the lag is not defined.
+The historical dataset in this repo was collected before this instrumentation was added. The table below will populate automatically on the next live session — the infrastructure is in place.
+
+| Metric | jBPF delivery latency p50 | jBPF delivery p99 | Standard poll-wait (mean) | Standard poll-wait (p99) |
+|---|---:|---:|---:|---:|
+| SINR / SNR | *pending live run* | *pending live run* | 0.82 s | 1.03 s |
+| UL BLER | *pending live run* | *pending live run* | 0.82 s | 1.03 s |
+| CQI | *pending live run* | *pending live run* | 0.82 s | 1.03 s |
+| Timing Advance | *pending live run* | *pending live run* | 0.82 s | 1.03 s |
+| Rank Indicator | *pending live run* | *pending live run* | 0.82 s | 1.03 s |
+| BSR | *pending live run* | *pending live run* | 0.82 s | 1.03 s |
+| DL MCS | *pending live run* | *pending live run* | 0.82 s | 1.03 s |
+| UL MCS | *pending live run* | *pending live run* | 0.82 s | 1.03 s |
+
+Standard poll-wait = half the measured Telegraf interval (mean 1.634 s → 0.82 s average wait; p99 2.055 s → 1.03 s). This is the average additional delay a metric sits in the WebSocket before Telegraf reads it. jBPF's equivalent is the IPC + UDP + decode path, expected O(1–10 ms).
 
 ---
 

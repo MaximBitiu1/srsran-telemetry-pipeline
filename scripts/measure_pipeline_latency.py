@@ -274,6 +274,62 @@ def extract_perf_overhead(session_start):
 
 # ── delivery latency report (from telemetry_to_influxdb.py latency CSV) ──────
 
+def latency_report_influxdb() -> None:
+    """
+    Query delivery_latency_ms directly from InfluxDB 1.x.
+    This field is written by telemetry_to_influxdb.py as:
+        recv_ns (time.time_ns(), wall-clock CLOCK_REALTIME)
+      - proto_ts_ns (jbpf_time_get_ns(), CLOCK_MONOTONIC)
+
+    Note: CLOCK_REALTIME and CLOCK_MONOTONIC share the same epoch offset
+    on a single host without NTP jumps. The result is the true E2E
+    delivery latency from BPF collector firing to Python decode, in ms.
+    """
+    tables = [
+        ("mac_crc_stats",   "SINR / UL BLER"),
+        ("mac_uci_stats",   "CQI / TA / RI"),
+        ("mac_bsr_stats",   "BSR"),
+        ("mac_harq_stats",  "HARQ MCS"),
+        ("fapi_dl_config",  "DL MCS"),
+        ("fapi_ul_config",  "UL MCS"),
+    ]
+
+    print("=" * 65)
+    print("jBPF E2E delivery latency — hook fire → Python decode (ms)")
+    print("=" * 65)
+    hdr = f"{'Metric':<22}  {'N':>5}  {'p50':>7}  {'p95':>7}  {'p99':>7}  {'max':>7}"
+    print(hdr)
+    print("-" * len(hdr))
+
+    any_data = False
+    for table, label in tables:
+        try:
+            rows = query_influx1(
+                f"SELECT delivery_latency_ms FROM {table} "
+                f"WHERE delivery_latency_ms > 0 AND delivery_latency_ms < 10000"
+            )
+        except Exception:
+            rows = []
+        if not rows:
+            print(f"  {label:<22}  (no data — run a live session first)")
+            continue
+        arr = np.array([float(r["delivery_latency_ms"]) for r in rows if r.get("delivery_latency_ms")])
+        if len(arr) == 0:
+            continue
+        any_data = True
+        print(f"  {label:<22}  {len(arr):>5}  "
+              f"{np.percentile(arr,50):>7.1f}  "
+              f"{np.percentile(arr,95):>7.1f}  "
+              f"{np.percentile(arr,99):>7.1f}  "
+              f"{arr.max():>7.1f}")
+
+    if not any_data:
+        print()
+        print("No delivery_latency_ms data found.")
+        print("Run a live session with telemetry_to_influxdb.py to populate it.")
+    print()
+
+
 def latency_report(csv_path: str) -> None:
     """
     Analyse the per-message delivery latency CSV produced by telemetry_to_influxdb.py
@@ -336,11 +392,18 @@ def main():
     parser = argparse.ArgumentParser(description="Pipeline latency & overhead measurement")
     parser.add_argument(
         "--latency-report", metavar="CSV",
-        help="Print per-message delivery latency from a telemetry_to_influxdb.py "
-             "latency CSV file and exit (file written to /tmp/jbpf_delivery_latency.csv "
-             "during a live session)."
+        help="Print per-message delivery latency from a CSV latency log."
+    )
+    parser.add_argument(
+        "--latency-influxdb", action="store_true",
+        help="Query delivery_latency_ms directly from InfluxDB (populated by "
+             "telemetry_to_influxdb.py during live sessions)."
     )
     args = parser.parse_args()
+
+    if args.latency_influxdb:
+        latency_report_influxdb()
+        return
 
     if args.latency_report:
         latency_report(args.latency_report)

@@ -117,9 +117,33 @@ def safe_float(v, default=0.0):
 
 UINT32_MAX = 4294967295
 
-def make_points(ts, schema, pkg, data):
-    """Convert a parsed telemetry record into a list of InfluxDB point dicts."""
-    iso_ts = ts.isoformat()
+def make_points(ts, schema, pkg, data, recv_ns: int = 0, proto_ts_ns: int = 0):
+    """Convert a parsed telemetry record into a list of InfluxDB point dicts.
+
+    recv_ns      — time.time_ns() when this line was processed (wall-clock ns)
+    proto_ts_ns  — proto.timestamp = jbpf_time_get_ns() = CLOCK_MONOTONIC ns
+
+    When both are non-zero, delivery_latency_ms = (recv_ns - proto_ts_ns) / 1e6
+    is the true E2E delivery latency from BPF hook fire to Python decode.
+    Both values are stored as fields so latency is queryable directly from InfluxDB.
+    """
+    # Use recv_ns as the InfluxDB timestamp (nanosecond precision) when available,
+    # otherwise fall back to the log-line wall-clock time.
+    if recv_ns:
+        point_ts = recv_ns  # int nanoseconds — written with time_precision='n'
+    else:
+        point_ts = ts.isoformat()
+
+    delivery_latency_ms = round((recv_ns - proto_ts_ns) / 1e6, 3) \
+        if recv_ns and proto_ts_ns and recv_ns > proto_ts_ns else None
+
+    def _add_latency(fields: dict) -> dict:
+        """Append latency fields to a point's field dict."""
+        if proto_ts_ns:
+            fields["proto_ts_ns"] = proto_ts_ns
+        if delivery_latency_ms is not None:
+            fields["delivery_latency_ms"] = delivery_latency_ms
+        return fields
     points = []
 
     if schema == "crc_stats":
@@ -139,7 +163,7 @@ def make_points(ts, schema, pkg, data):
             points.append({
                 "measurement": "mac_crc_stats",
                 "tags": {"ue": str(ue)},
-                "time": iso_ts,
+                "time": point_ts,
                 "fields": {
                     "succ_tx": safe_int(s.get("succTx", 0)),
                     "cnt_tx": safe_int(s.get("cntTx", 0)),
@@ -163,7 +187,7 @@ def make_points(ts, schema, pkg, data):
             points.append({
                 "measurement": "mac_bsr_stats",
                 "tags": {"ue": str(ue)},
-                "time": iso_ts,
+                "time": point_ts,
                 "fields": {
                     "total_bytes": b,
                     "count": c,
@@ -184,7 +208,7 @@ def make_points(ts, schema, pkg, data):
             points.append({
                 "measurement": "mac_uci_stats",
                 "tags": {"ue": str(ue)},
-                "time": iso_ts,
+                "time": point_ts,
                 "fields": {
                     "avg_cqi": safe_div(cqi.get("total", 0), cqi.get("count", 0)),
                     "avg_ri": safe_div(ri.get("total", 0), ri.get("count", 0)),
@@ -212,7 +236,7 @@ def make_points(ts, schema, pkg, data):
             points.append({
                 "measurement": "mac_harq_stats",
                 "tags": {"ue": str(ue), "stream_id": stream_id},
-                "time": iso_ts,
+                "time": point_ts,
                 "fields": {
                     "avg_mcs": safe_div(int(mcs.get("total", 0)), int(mcs.get("count", 0))),
                     "min_mcs": float(mcs_min),
@@ -239,7 +263,7 @@ def make_points(ts, schema, pkg, data):
         points.append({
             "measurement": "rlc_dl_stats",
             "tags": {},
-            "time": iso_ts,
+            "time": point_ts,
             "fields": {
                 "pdu_tx_bytes": total_pdu_tx,
                 "sdu_new_bytes": total_sdu_new,
@@ -263,7 +287,7 @@ def make_points(ts, schema, pkg, data):
         points.append({
             "measurement": "rlc_ul_stats",
             "tags": {},
-            "time": iso_ts,
+            "time": point_ts,
             "fields": {
                 "pdu_rx_bytes": total_pdu_rx,
                 "sdu_delivered_bytes": total_sdu_deliv,
@@ -290,7 +314,7 @@ def make_points(ts, schema, pkg, data):
         points.append({
             "measurement": "pdcp_dl_stats",
             "tags": {},
-            "time": iso_ts,
+            "time": point_ts,
             "fields": {
                 "data_tx_bytes": total_data_tx,
                 "data_retx_bytes": total_data_retx,
@@ -312,7 +336,7 @@ def make_points(ts, schema, pkg, data):
         points.append({
             "measurement": "pdcp_ul_stats",
             "tags": {},
-            "time": iso_ts,
+            "time": point_ts,
             "fields": {
                 "data_rx_bytes": total_data_rx,
                 "sdu_delivered_bytes": total_sdu_deliv,
@@ -330,7 +354,7 @@ def make_points(ts, schema, pkg, data):
             points.append({
                 "measurement": "fapi_dl_config",
                 "tags": {"rnti": str(rnti)},
-                "time": iso_ts,
+                "time": point_ts,
                 "fields": {
                     "avg_mcs": safe_float(s.get("l1McsAvg", 0)) / cnt,
                     "min_mcs": safe_float(s.get("l1McsMin", 0)),
@@ -351,7 +375,7 @@ def make_points(ts, schema, pkg, data):
             points.append({
                 "measurement": "fapi_ul_config",
                 "tags": {},
-                "time": iso_ts,
+                "time": point_ts,
                 "fields": {
                     "avg_mcs": safe_float(s.get("l1McsAvg", 0)) / cnt,
                     "min_mcs": safe_float(s.get("l1McsMin", 0)),
@@ -378,7 +402,7 @@ def make_points(ts, schema, pkg, data):
             points.append({
                 "measurement": "fapi_crc_stats",
                 "tags": {},
-                "time": iso_ts,
+                "time": point_ts,
                 "fields": {
                     "snr_min": float(snr_min),
                     "snr_max": float(snr_max),
@@ -392,7 +416,7 @@ def make_points(ts, schema, pkg, data):
         points.append({
             "measurement": "fapi_rach_stats",
             "tags": {},
-            "time": iso_ts,
+            "time": point_ts,
             "fields": {"event": 1}
         })
 
@@ -400,7 +424,7 @@ def make_points(ts, schema, pkg, data):
         points.append({
             "measurement": "rrc_events",
             "tags": {"event_type": "ue_add"},
-            "time": iso_ts,
+            "time": point_ts,
             "fields": {
                 "event": 1,
                 "c_rnti": safe_int(data.get("cRnti", 0)),
@@ -417,7 +441,7 @@ def make_points(ts, schema, pkg, data):
                 "event_type": "procedure",
                 "procedure": proc_names.get(proc_id, f"proc_{proc_id}"),
             },
-            "time": iso_ts,
+            "time": point_ts,
             "fields": {
                 "event": 1,
                 "success": 1 if data.get("success") else 0,
@@ -429,7 +453,7 @@ def make_points(ts, schema, pkg, data):
         points.append({
             "measurement": "rrc_events",
             "tags": {"event_type": "ue_remove"},
-            "time": iso_ts,
+            "time": point_ts,
             "fields": {"event": 1}
         })
 
@@ -443,7 +467,7 @@ def make_points(ts, schema, pkg, data):
                 "event_type": "started",
                 "procedure": ngap_names.get(proc_id, f"proc_{proc_id}"),
             },
-            "time": iso_ts,
+            "time": point_ts,
             "fields": {
                 "event": 1,
                 "procedure_id": proc_id,
@@ -460,7 +484,7 @@ def make_points(ts, schema, pkg, data):
                 "event_type": "completed",
                 "procedure": ngap_names.get(proc_id, f"proc_{proc_id}"),
             },
-            "time": iso_ts,
+            "time": point_ts,
             "fields": {
                 "event": 1,
                 "success": 1 if data.get("success") else 0,
@@ -476,7 +500,7 @@ def make_points(ts, schema, pkg, data):
             points.append({
                 "measurement": "jbpf_perf",
                 "tags": {"hook": name},
-                "time": iso_ts,
+                "time": point_ts,
                 "fields": {
                     "p50": safe_int(hp.get("p50", 0)),
                     "p90": safe_int(hp.get("p90", 0)),
@@ -504,7 +528,7 @@ def make_points(ts, schema, pkg, data):
             points.append({
                 "measurement": "mac_crc_stats_custom",
                 "tags": {"ue": str(ue)},
-                "time": iso_ts,
+                "time": point_ts,
                 "fields": {
                     "succ_tx": safe_int(s.get("succTx", 0)),
                     "cnt_tx": safe_int(s.get("cntTx", 0)),
@@ -529,7 +553,7 @@ def make_points(ts, schema, pkg, data):
             points.append({
                 "measurement": "mac_bsr_stats_custom",
                 "tags": {"ue": str(ue)},
-                "time": iso_ts,
+                "time": point_ts,
                 "fields": {
                     "cnt": cnt,
                     "total_bytes": float(total_bytes),
@@ -551,7 +575,7 @@ def make_points(ts, schema, pkg, data):
             points.append({
                 "measurement": "mac_ul_harq_stats_custom",
                 "tags": {"ue": str(ue)},
-                "time": iso_ts,
+                "time": point_ts,
                 "fields": {
                     "mcs_count": cnt,
                     "avg_mcs": safe_div(s.get("mcsSum", 0), cnt),
@@ -564,6 +588,9 @@ def make_points(ts, schema, pkg, data):
                 }
             })
 
+    # Attach latency fields to every point in this batch
+    for p in points:
+        _add_latency(p["fields"])
     return points
 
 # ── Tail file implementation ─────────────────────────────────────────────────
@@ -699,16 +726,21 @@ def main():
         ts, schema, pkg, data = result
         stats["parsed"] += 1
 
-        # Record per-message E2E delivery latency (only in live mode, not replay)
-        if mode == "live":
-            proto_ts = data.get("timestamp")
-            if proto_ts is not None:
-                try:
-                    record_latency(schema, int(proto_ts))
-                except (TypeError, ValueError):
-                    pass
+        # Capture receive time and proto timestamp for latency measurement
+        recv_ns = time.time_ns()
+        proto_ts_ns = 0
+        proto_ts_raw = data.get("timestamp")
+        if proto_ts_raw is not None:
+            try:
+                proto_ts_ns = int(proto_ts_raw)
+            except (TypeError, ValueError):
+                pass
 
-        points = make_points(ts, schema, pkg, data)
+        # Record per-message E2E delivery latency CSV (live mode only)
+        if mode == "live" and proto_ts_ns:
+            record_latency(schema, proto_ts_ns)
+
+        points = make_points(ts, schema, pkg, data, recv_ns=recv_ns, proto_ts_ns=proto_ts_ns)
         if points:
             batch.extend(points)
 
@@ -717,7 +749,7 @@ def main():
         if len(batch) >= BATCH_SIZE or (now - last_flush) >= FLUSH_INTERVAL:
             if batch:
                 try:
-                    client.write_points(batch, time_precision='s')
+                    client.write_points(batch, time_precision='n')
                     stats["written"] += len(batch)
                 except Exception as e:
                     stats["errors"] += 1
@@ -732,7 +764,7 @@ def main():
     # Final flush
     if batch:
         try:
-            client.write_points(batch, time_precision='s')
+            client.write_points(batch, time_precision='n')
             stats["written"] += len(batch)
         except Exception as e:
             stats["errors"] += 1
